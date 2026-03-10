@@ -25,4 +25,7 @@ public class ServiceRequest {
 
     @NotNull(message = "El estado es obligatorio")
     private Boolean active;
+
+    @NotNull(message = "La categoría es obligatoria")
+    private Long categoryId;
 }

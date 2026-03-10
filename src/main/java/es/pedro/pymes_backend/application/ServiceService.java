@@ -1,10 +1,14 @@
 package es.pedro.pymes_backend.application;
 
+import es.pedro.pymes_backend.domain.CategoryEntity;
 import es.pedro.pymes_backend.domain.ServiceEntity;
+import es.pedro.pymes_backend.infrastructure.repository.CategoryRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ServiceRepository;
+import es.pedro.pymes_backend.infrastructure.web.dto.CategorySummaryResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.ServiceRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ServiceResponse;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
 
@@ -12,41 +16,25 @@ import java.util.List;
 public class ServiceService {
 
     private final ServiceRepository repository;
+    private final CategoryRepository categoryRepository;
 
-    public ServiceService(ServiceRepository repository) {
+    public ServiceService(ServiceRepository repository, CategoryRepository categoryRepository) {
         this.repository = repository;
+        this.categoryRepository = categoryRepository;
     }
 
-    public List<ServiceResponse> getAll() {
-        return repository.findAll()
+    public List<ServiceResponse> getAll(String search, Boolean active, Long categoryId, Double minPrice, Double maxPrice) {
+        Specification<ServiceEntity> specification = Specification
+                .where(ServiceSpecification.hasSearch(search))
+                .and(ServiceSpecification.hasActive(active))
+                .and(ServiceSpecification.hasCategoryId(categoryId))
+                .and(ServiceSpecification.hasMinPrice(minPrice))
+                .and(ServiceSpecification.hasMaxPrice(maxPrice));
+
+        return repository.findAll(specification)
                 .stream()
                 .map(this::toResponse)
                 .toList();
-    }
-
-    public ServiceResponse create(ServiceRequest request) {
-        ServiceEntity serviceEntity = new ServiceEntity();
-        mapRequestToEntity(request, serviceEntity);
-
-        ServiceEntity saved = repository.save(serviceEntity);
-        return toResponse(saved);
-    }
-
-    public ServiceResponse update(Long id, ServiceRequest request) {
-        ServiceEntity serviceEntity = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
-
-        mapRequestToEntity(request, serviceEntity);
-
-        ServiceEntity updated = repository.save(serviceEntity);
-        return toResponse(updated);
-    }
-
-    public void delete(Long id) {
-        ServiceEntity serviceEntity = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
-
-        repository.delete(serviceEntity);
     }
 
     public ServiceResponse getById(Long id) {
@@ -56,22 +44,62 @@ public class ServiceService {
         return toResponse(service);
     }
 
-    private void mapRequestToEntity(ServiceRequest request, ServiceEntity serviceEntity) {
-        serviceEntity.setName(request.getName());
-        serviceEntity.setDescription(request.getDescription());
-        serviceEntity.setDurationMinutes(request.getDurationMinutes());
-        serviceEntity.setPrice(request.getPrice());
-        serviceEntity.setActive(request.getActive());
+    public ServiceResponse create(ServiceRequest request) {
+        CategoryEntity category = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con id: " + request.getCategoryId()));
+
+        ServiceEntity service = new ServiceEntity();
+        mapRequestToEntity(request, service, category);
+
+        ServiceEntity saved = repository.save(service);
+        return toResponse(saved);
     }
 
-    private ServiceResponse toResponse(ServiceEntity serviceEntity) {
+    public ServiceResponse update(Long id, ServiceRequest request) {
+        ServiceEntity service = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
+
+        CategoryEntity category = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con id: " + request.getCategoryId()));
+
+        mapRequestToEntity(request, service, category);
+
+        ServiceEntity updated = repository.save(service);
+        return toResponse(updated);
+    }
+
+    public void delete(Long id) {
+        ServiceEntity service = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
+
+        repository.delete(service);
+    }
+
+    private void mapRequestToEntity(ServiceRequest request, ServiceEntity service, CategoryEntity category) {
+        service.setName(request.getName());
+        service.setDescription(request.getDescription());
+        service.setDurationMinutes(request.getDurationMinutes());
+        service.setPrice(request.getPrice());
+        service.setActive(request.getActive());
+        service.setCategory(category);
+    }
+
+    private ServiceResponse toResponse(ServiceEntity service) {
         return ServiceResponse.builder()
-                .id(serviceEntity.getId())
-                .name(serviceEntity.getName())
-                .description(serviceEntity.getDescription())
-                .durationMinutes(serviceEntity.getDurationMinutes())
-                .price(serviceEntity.getPrice())
-                .active(serviceEntity.getActive())
+                .id(service.getId())
+                .name(service.getName())
+                .description(service.getDescription())
+                .durationMinutes(service.getDurationMinutes())
+                .price(service.getPrice())
+                .active(service.getActive())
+                .category(
+                        CategorySummaryResponse.builder()
+                                .id(service.getCategory().getId())
+                                .name(service.getCategory().getName())
+                                .color(service.getCategory().getColor())
+                                .icon(service.getCategory().getIcon())
+                                .build()
+                )
                 .build();
     }
 }

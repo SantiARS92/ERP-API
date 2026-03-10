@@ -15,4 +15,5 @@ public class ServiceResponse {
     private Integer durationMinutes;
     private Double price;
     private Boolean active;
+    private CategorySummaryResponse category;
 }

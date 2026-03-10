@@ -21,8 +21,19 @@ public class ServiceController {
     }
 
     @GetMapping
-    public List<ServiceResponse> getAll() {
-        return serviceService.getAll();
+    public List<ServiceResponse> getAll(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice
+    ) {
+        return serviceService.getAll(search, active, categoryId, minPrice, maxPrice);
+    }
+
+    @GetMapping("/{id}")
+    public ServiceResponse getById(@PathVariable Long id) {
+        return serviceService.getById(id);
     }
 
     @PostMapping
@@ -34,11 +45,6 @@ public class ServiceController {
     @PutMapping("/{id}")
     public ServiceResponse update(@PathVariable Long id, @Valid @RequestBody ServiceRequest request) {
         return serviceService.update(id, request);
-    }
-
-    @GetMapping("/{id}")
-    public ServiceResponse getById(@PathVariable Long id) {
-        return serviceService.getById(id);
     }
 
     @DeleteMapping("/{id}")
