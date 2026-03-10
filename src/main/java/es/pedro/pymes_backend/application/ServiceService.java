@@ -9,6 +9,10 @@ import es.pedro.pymes_backend.infrastructure.web.dto.ServiceRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ServiceResponse;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
 import org.springframework.data.jpa.domain.Specification;
+import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -23,7 +27,15 @@ public class ServiceService {
         this.categoryRepository = categoryRepository;
     }
 
-    public List<ServiceResponse> getAll(String search, Boolean active, Long categoryId, Double minPrice, Double maxPrice) {
+    public PagedResponse<ServiceResponse> getAll(
+            String search,
+            Boolean active,
+            Long categoryId,
+            Double minPrice,
+            Double maxPrice,
+            int page,
+            int size
+    ) {
         Specification<ServiceEntity> specification = Specification
                 .where(ServiceSpecification.hasSearch(search))
                 .and(ServiceSpecification.hasActive(active))
@@ -31,10 +43,24 @@ public class ServiceService {
                 .and(ServiceSpecification.hasMinPrice(minPrice))
                 .and(ServiceSpecification.hasMaxPrice(maxPrice));
 
-        return repository.findAll(specification)
+        Pageable pageable = PageRequest.of(page, size);
+
+        Page<ServiceEntity> resultPage = repository.findAll(specification, pageable);
+
+        List<ServiceResponse> content = resultPage.getContent()
                 .stream()
                 .map(this::toResponse)
                 .toList();
+
+        return PagedResponse.<ServiceResponse>builder()
+                .content(content)
+                .page(resultPage.getNumber())
+                .size(resultPage.getSize())
+                .totalElements(resultPage.getTotalElements())
+                .totalPages(resultPage.getTotalPages())
+                .first(resultPage.isFirst())
+                .last(resultPage.isLast())
+                .build();
     }
 
     public ServiceResponse getById(Long id) {

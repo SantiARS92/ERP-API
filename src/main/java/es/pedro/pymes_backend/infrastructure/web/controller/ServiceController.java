@@ -6,6 +6,7 @@ import es.pedro.pymes_backend.infrastructure.web.dto.ServiceResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
 
 import java.util.List;
 
@@ -21,14 +22,16 @@ public class ServiceController {
     }
 
     @GetMapping
-    public List<ServiceResponse> getAll(
+    public PagedResponse<ServiceResponse> getAll(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) Double minPrice,
-            @RequestParam(required = false) Double maxPrice
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
     ) {
-        return serviceService.getAll(search, active, categoryId, minPrice, maxPrice);
+        return serviceService.getAll(search, active, categoryId, minPrice, maxPrice, page, size);
     }
 
     @GetMapping("/{id}")
