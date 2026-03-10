@@ -49,6 +49,13 @@ public class ServiceService {
         repository.delete(serviceEntity);
     }
 
+    public ServiceResponse getById(Long id) {
+        ServiceEntity service = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
+
+        return toResponse(service);
+    }
+
     private void mapRequestToEntity(ServiceRequest request, ServiceEntity serviceEntity) {
         serviceEntity.setName(request.getName());
         serviceEntity.setDescription(request.getDescription());

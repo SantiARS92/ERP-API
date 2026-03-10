@@ -36,6 +36,11 @@ public class ServiceController {
         return serviceService.update(id, request);
     }
 
+    @GetMapping("/{id}")
+    public ServiceResponse getById(@PathVariable Long id) {
+        return serviceService.getById(id);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
