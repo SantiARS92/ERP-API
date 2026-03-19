@@ -1,6 +1,7 @@
 package es.pedro.pymes_backend.application;
 
 import es.pedro.pymes_backend.domain.AppointmentEntity;
+import es.pedro.pymes_backend.domain.AppointmentStatus;
 import es.pedro.pymes_backend.infrastructure.repository.AppointmentRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ClientRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ServiceRepository;
@@ -22,6 +23,7 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final ClientRepository clientRepository;
     private final ServiceRepository serviceRepository;
+    private final SaleService saleService;
 
     public List<AppointmentResponse> getAppointments(LocalDate fromDate, LocalDate toDate) {
 
@@ -77,6 +79,8 @@ public class AppointmentService {
                 .findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cita no encontrada con id: " + id));
 
+        boolean wasConfirmedBefore = appointment.getStatus() == AppointmentStatus.CONFIRMED;
+
         ClientEntity client = clientRepository
                 .findById(request.getClientId())
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado"));
@@ -100,7 +104,13 @@ public class AppointmentService {
         appointment.setStatus(request.getStatus());
         appointment.setInternalNotes(request.getInternalNotes());
 
-        return mapToResponse(appointmentRepository.save(appointment));
+        AppointmentEntity updated = appointmentRepository.save(appointment);
+
+        if (!wasConfirmedBefore && updated.getStatus() == AppointmentStatus.CONFIRMED) {
+            saleService.createSaleFromConfirmedAppointment(updated);
+        }
+
+        return mapToResponse(updated);
     }
 
     public void deleteAppointment(Long id) {
