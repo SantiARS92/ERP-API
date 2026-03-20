@@ -30,4 +30,6 @@ public interface SaleService {
     List<SaleResponse> getRecentSales(int days, int limit);
 
     void createSaleFromConfirmedAppointment(AppointmentEntity appointment);
+
+    void deleteSaleFromAppointment(Long appointmentId);
 }

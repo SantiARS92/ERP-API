@@ -226,6 +226,16 @@ public class SaleServiceImpl implements SaleService {
         saleRepository.save(sale);
     }
 
+    @Override
+    public void deleteSaleFromAppointment(Long appointmentId) {
+        if (appointmentId == null) {
+            throw badRequest("El id de la cita es obligatorio");
+        }
+
+        saleRepository.findByAppointmentId(appointmentId)
+                .ifPresent(saleRepository::delete);
+    }
+
     private void applySaleData(
             SaleEntity sale,
             SaleItemType itemType,

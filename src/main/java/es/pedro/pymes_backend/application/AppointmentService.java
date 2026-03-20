@@ -111,6 +111,9 @@ public class AppointmentService {
         if (!wasConfirmedBefore && updated.getStatus() == AppointmentStatus.CONFIRMED) {
             saleService.createSaleFromConfirmedAppointment(updated);
         }
+        if (wasConfirmedBefore && updated.getStatus() != AppointmentStatus.CONFIRMED) {
+            saleService.deleteSaleFromAppointment(updated.getId());
+        }
 
         return mapToResponse(updated);
     }
@@ -121,6 +124,7 @@ public class AppointmentService {
                 .findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cita no encontrada con id: " + id));
 
+        saleService.deleteSaleFromAppointment(appointment.getId());
         appointmentRepository.delete(appointment);
     }
 
