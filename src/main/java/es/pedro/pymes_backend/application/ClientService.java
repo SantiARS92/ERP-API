@@ -6,6 +6,7 @@ import es.pedro.pymes_backend.infrastructure.web.dto.ClientRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ClientResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class ClientService {
 

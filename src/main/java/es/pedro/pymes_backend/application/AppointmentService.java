@@ -10,6 +10,7 @@ import es.pedro.pymes_backend.domain.ServiceEntity;
 import es.pedro.pymes_backend.infrastructure.web.dto.AppointmentRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.AppointmentResponse;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +18,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class AppointmentService {
 

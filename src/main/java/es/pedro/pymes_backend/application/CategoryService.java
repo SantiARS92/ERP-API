@@ -7,11 +7,13 @@ import es.pedro.pymes_backend.infrastructure.web.dto.CategoryRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.CategoryResponse;
 import es.pedro.pymes_backend.infrastructure.web.exception.ConflictException;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@Transactional
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
