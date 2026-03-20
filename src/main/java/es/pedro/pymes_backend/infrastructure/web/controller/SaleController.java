@@ -1,6 +1,7 @@
 package es.pedro.pymes_backend.infrastructure.web.controller;
 
 import es.pedro.pymes_backend.application.SaleService;
+import es.pedro.pymes_backend.application.SalePdfService;
 import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateSaleRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.SaleResponse;
@@ -8,7 +9,10 @@ import es.pedro.pymes_backend.infrastructure.web.dto.UpdateSaleRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -20,6 +24,7 @@ import java.util.List;
 public class SaleController {
 
     private final SaleService saleService;
+    private final SalePdfService salePdfService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -64,5 +69,32 @@ public class SaleController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteSale(@PathVariable Long id) {
         saleService.deleteSale(id);
+    }
+
+    @GetMapping("/export/pdf")
+    public ResponseEntity<byte[]> exportSalesPdf(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate fromDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate toDate
+    ) {
+        byte[] pdfBytes = salePdfService.generateSalesPdf(search, fromDate, toDate);
+
+        String fileName = buildPdfFileName(fromDate, toDate);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdfBytes);
+    }
+
+    private String buildPdfFileName(LocalDate fromDate, LocalDate toDate) {
+        if (fromDate != null && toDate != null) {
+            return "sales-report-" + fromDate + "-to-" + toDate + ".pdf";
+        }
+        return "sales-report.pdf";
     }
 }
