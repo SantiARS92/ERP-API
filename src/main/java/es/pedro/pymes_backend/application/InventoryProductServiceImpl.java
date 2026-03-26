@@ -9,6 +9,7 @@ import es.pedro.pymes_backend.infrastructure.web.dto.CreateInventoryProductReque
 import es.pedro.pymes_backend.infrastructure.web.dto.InventoryProductResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.UpdateInventoryProductRequest;
+import es.pedro.pymes_backend.infrastructure.web.exception.BadRequestException;
 import es.pedro.pymes_backend.infrastructure.web.exception.ConflictException;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -55,8 +56,7 @@ public class InventoryProductServiceImpl implements InventoryProductService {
 
     @Override
     public InventoryProductResponse updateProduct(Long id, UpdateInventoryProductRequest request) {
-        InventoryProductEntity product = inventoryProductRepository.findByIdAndActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Producto de inventario no encontrado con id: " + id));
+        InventoryProductEntity product = getActiveProductEntityById(id);
 
         validateUniqueNameForUpdate(request.getName(), id);
         validateUniqueSkuForUpdate(request.getSku(), id);
@@ -79,10 +79,25 @@ public class InventoryProductServiceImpl implements InventoryProductService {
     @Override
     @Transactional(readOnly = true)
     public InventoryProductResponse getProductById(Long id) {
-        InventoryProductEntity product = inventoryProductRepository.findByIdAndActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Producto de inventario no encontrado con id: " + id));
+        return mapToResponse(getActiveProductEntityById(id));
+    }
 
-        return mapToResponse(product);
+    @Override
+    @Transactional(readOnly = true)
+    public InventoryProductEntity getActiveProductEntityById(Long id) {
+        return inventoryProductRepository.findByIdAndActiveTrue(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto de inventario no encontrado con id: " + id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InventoryProductEntity getActiveProductEntityByName(String name) {
+        String normalizedName = normalizeRequiredName(name);
+
+        return inventoryProductRepository.findByNameIgnoreCaseAndActiveTrue(normalizedName)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Producto de inventario no encontrado con nombre: " + normalizedName
+                ));
     }
 
     @Override
@@ -116,9 +131,45 @@ public class InventoryProductServiceImpl implements InventoryProductService {
     }
 
     @Override
+    @Transactional
+    public InventoryProductEntity addStock(Long id, int quantity) {
+        return addStock(getActiveProductEntityById(id), quantity);
+    }
+
+    @Override
+    @Transactional
+    public InventoryProductEntity addStock(InventoryProductEntity product, int quantity) {
+        validatePositiveQuantity(quantity, "sumar");
+
+        InventoryProductEntity managedProduct = requireProduct(product);
+        managedProduct.setStock(managedProduct.getStock() + quantity);
+
+        return inventoryProductRepository.save(managedProduct);
+    }
+
+    @Override
+    @Transactional
+    public InventoryProductEntity subtractStock(Long id, int quantity) {
+        return subtractStock(getActiveProductEntityById(id), quantity);
+    }
+
+    @Override
+    @Transactional
+    public InventoryProductEntity subtractStock(InventoryProductEntity product, int quantity) {
+        validatePositiveQuantity(quantity, "restar");
+
+        InventoryProductEntity managedProduct = requireProduct(product);
+        if (managedProduct.getStock() < quantity) {
+            throw new ConflictException("No hay stock suficiente para el producto con id: " + managedProduct.getId());
+        }
+
+        managedProduct.setStock(managedProduct.getStock() - quantity);
+        return inventoryProductRepository.save(managedProduct);
+    }
+
+    @Override
     public void deleteProduct(Long id) {
-        InventoryProductEntity product = inventoryProductRepository.findByIdAndActiveTrue(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Producto de inventario no encontrado con id: " + id));
+        InventoryProductEntity product = getActiveProductEntityById(id);
 
         product.setActive(false);
         inventoryProductRepository.save(product);
@@ -166,6 +217,26 @@ public class InventoryProductServiceImpl implements InventoryProductService {
             return null;
         }
         return value.trim();
+    }
+
+    private String normalizeRequiredName(String value) {
+        if (!StringUtils.hasText(value)) {
+            throw new BadRequestException("El nombre del producto es obligatorio");
+        }
+        return value.trim();
+    }
+
+    private void validatePositiveQuantity(int quantity, String operation) {
+        if (quantity <= 0) {
+            throw new BadRequestException("La cantidad a " + operation + " debe ser mayor que 0");
+        }
+    }
+
+    private InventoryProductEntity requireProduct(InventoryProductEntity product) {
+        if (product == null) {
+            throw new BadRequestException("El producto de inventario es obligatorio");
+        }
+        return product;
     }
 
     private String buildCategorySummary(List<Long> categoryIds) {

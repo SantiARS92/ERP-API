@@ -26,6 +26,7 @@ public class SaleResponse {
 
     private SaleItemType itemType;
     private Long serviceId;
+    private Long inventoryProductId;
     private String itemName;
 
     private BigDecimal unitPrice;

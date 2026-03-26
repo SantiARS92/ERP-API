@@ -2,6 +2,7 @@ package es.pedro.pymes_backend.application;
 
 import es.pedro.pymes_backend.domain.ExpenseCategory;
 import es.pedro.pymes_backend.domain.ExpenseEntity;
+import es.pedro.pymes_backend.domain.InventoryProductEntity;
 import es.pedro.pymes_backend.infrastructure.repository.ExpenseRepository;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateExpenseRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ExpenseResponse;
@@ -12,6 +13,7 @@ import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundExcep
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -23,8 +25,10 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final ExpensePdfService expensePdfService;
+    private final InventoryProductService inventoryProductService;
 
     @Override
+    @Transactional
     public ExpenseResponse createExpense(CreateExpenseRequest request) {
         ExpenseEntity expense = ExpenseEntity.builder()
                 .expenseDate(request.getExpenseDate())
@@ -35,14 +39,18 @@ public class ExpenseServiceImpl implements ExpenseService {
                 .notes(normalizeNotes(request.getNotes()))
                 .build();
 
+        syncInventoryIfApplicable(expense);
+
         ExpenseEntity saved = expenseRepository.save(expense);
         return mapToResponse(saved);
     }
 
     @Override
+    @Transactional
     public ExpenseResponse updateExpense(Long id, UpdateExpenseRequest request) {
-        ExpenseEntity expense = expenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Gasto no encontrado con id: " + id));
+        ExpenseEntity expense = getExpenseEntityById(id);
+
+        revertInventorySyncIfNeeded(expense);
 
         expense.setExpenseDate(request.getExpenseDate());
         expense.setConcept(request.getConcept().trim());
@@ -50,6 +58,9 @@ public class ExpenseServiceImpl implements ExpenseService {
         expense.setQuantity(request.getQuantity());
         expense.setAmount(request.getAmount());
         expense.setNotes(normalizeNotes(request.getNotes()));
+        expense.setInventoryProduct(null);
+
+        syncInventoryIfApplicable(expense);
 
         ExpenseEntity updated = expenseRepository.save(expense);
         return mapToResponse(updated);
@@ -57,10 +68,7 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     @Override
     public ExpenseResponse getExpenseById(Long id) {
-        ExpenseEntity expense = expenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Gasto no encontrado con id: " + id));
-
-        return mapToResponse(expense);
+        return mapToResponse(getExpenseEntityById(id));
     }
 
     @Override
@@ -128,9 +136,11 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     @Override
+    @Transactional
     public void deleteExpense(Long id) {
-        ExpenseEntity expense = expenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Gasto no encontrado con id: " + id));
+        ExpenseEntity expense = getExpenseEntityById(id);
+
+        revertInventorySyncIfNeeded(expense);
 
         expenseRepository.delete(expense);
 
@@ -164,6 +174,44 @@ public class ExpenseServiceImpl implements ExpenseService {
             return null;
         }
         return notes.trim();
+    }
+
+    private ExpenseEntity getExpenseEntityById(Long id) {
+        return expenseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Gasto no encontrado con id: " + id));
+    }
+
+    private void syncInventoryIfApplicable(ExpenseEntity expense) {
+        expense.setInventoryProduct(null);
+
+        if (expense.getCategory() != ExpenseCategory.SUPPLIES) {
+            return;
+        }
+
+        InventoryProductEntity inventoryProduct = findActiveInventoryProductByConcept(expense.getConcept());
+        if (inventoryProduct == null) {
+            return;
+        }
+
+        InventoryProductEntity updatedProduct = inventoryProductService.addStock(inventoryProduct, expense.getQuantity());
+        expense.setInventoryProduct(updatedProduct);
+    }
+
+    private void revertInventorySyncIfNeeded(ExpenseEntity expense) {
+        if (expense.getInventoryProduct() == null) {
+            return;
+        }
+
+        inventoryProductService.subtractStock(expense.getInventoryProduct(), expense.getQuantity());
+        expense.setInventoryProduct(null);
+    }
+
+    private InventoryProductEntity findActiveInventoryProductByConcept(String concept) {
+        try {
+            return inventoryProductService.getActiveProductEntityByName(concept);
+        } catch (ResourceNotFoundException ex) {
+            return null;
+        }
     }
 
     private ExpenseResponse mapToResponse(ExpenseEntity expense) {

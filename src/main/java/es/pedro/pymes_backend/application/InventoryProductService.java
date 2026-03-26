@@ -1,5 +1,6 @@
 package es.pedro.pymes_backend.application;
 
+import es.pedro.pymes_backend.domain.InventoryProductEntity;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateInventoryProductRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.InventoryProductResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
@@ -15,7 +16,19 @@ public interface InventoryProductService {
 
     InventoryProductResponse getProductById(Long id);
 
+    InventoryProductEntity getActiveProductEntityById(Long id);
+
+    InventoryProductEntity getActiveProductEntityByName(String name);
+
     PagedResponse<InventoryProductResponse> getProducts(String search, List<Long> categoryIds, int page, int size);
+
+    InventoryProductEntity addStock(Long id, int quantity);
+
+    InventoryProductEntity addStock(InventoryProductEntity product, int quantity);
+
+    InventoryProductEntity subtractStock(Long id, int quantity);
+
+    InventoryProductEntity subtractStock(InventoryProductEntity product, int quantity);
 
     void deleteProduct(Long id);
 

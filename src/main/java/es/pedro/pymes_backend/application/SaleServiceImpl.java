@@ -3,6 +3,7 @@ package es.pedro.pymes_backend.application;
 import es.pedro.pymes_backend.domain.AppointmentEntity;
 import es.pedro.pymes_backend.domain.AppointmentStatus;
 import es.pedro.pymes_backend.domain.ClientEntity;
+import es.pedro.pymes_backend.domain.InventoryProductEntity;
 import es.pedro.pymes_backend.domain.PaymentMethod;
 import es.pedro.pymes_backend.domain.SaleEntity;
 import es.pedro.pymes_backend.domain.SaleItemType;
@@ -43,6 +44,7 @@ public class SaleServiceImpl implements SaleService {
     private final SaleRepository saleRepository;
     private final ClientRepository clientRepository;
     private final ServiceRepository serviceRepository;
+    private final InventoryProductService inventoryProductService;
 
     @Override
     public SaleResponse createManualSale(CreateSaleRequest request) {
@@ -58,6 +60,7 @@ public class SaleServiceImpl implements SaleService {
                 sale,
                 request.getItemType(),
                 request.getServiceId(),
+                request.getInventoryProductId(),
                 request.getItemName(),
                 request.getUnitPrice(),
                 request.getQuantity(),
@@ -75,6 +78,8 @@ public class SaleServiceImpl implements SaleService {
         SaleEntity sale = saleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada con id: " + id));
 
+        restoreInventoryStockIfNeeded(sale);
+
         ClientEntity client = resolveClient(request.getClientId());
         sale.setClient(client);
         sale.setClientName(client.getFullName());
@@ -83,6 +88,7 @@ public class SaleServiceImpl implements SaleService {
                 sale,
                 request.getItemType(),
                 request.getServiceId(),
+                request.getInventoryProductId(),
                 request.getItemName(),
                 request.getUnitPrice(),
                 request.getQuantity(),
@@ -103,6 +109,8 @@ public class SaleServiceImpl implements SaleService {
         if (sale.getSourceType() == SaleSourceType.APPOINTMENT) {
             throw new ConflictException("No se puede borrar una venta generada desde una cita");
         }
+
+        restoreInventoryStockIfNeeded(sale);
 
         saleRepository.delete(sale);
     }
@@ -214,6 +222,7 @@ public class SaleServiceImpl implements SaleService {
         sale.setClientName(appointment.getClientName());
         sale.setItemType(SaleItemType.SERVICE);
         sale.setService(service);
+        sale.setInventoryProduct(null);
         sale.setItemName(appointment.getServiceName());
         sale.setUnitPrice(unitPrice);
         sale.setQuantity(1);
@@ -240,6 +249,7 @@ public class SaleServiceImpl implements SaleService {
             SaleEntity sale,
             SaleItemType itemType,
             Long serviceId,
+            Long inventoryProductId,
             String itemName,
             BigDecimal unitPrice,
             Integer quantity,
@@ -270,20 +280,22 @@ public class SaleServiceImpl implements SaleService {
             validateUnitPrice(resolvedUnitPrice);
 
             sale.setService(service);
+            sale.setInventoryProduct(null);
             sale.setItemName(service.getName());
             sale.setUnitPrice(resolvedUnitPrice);
         } else {
-            if (itemName == null || itemName.isBlank()) {
-                throw badRequest("itemName es obligatorio para ventas de producto");
-            }
             if (unitPrice == null) {
                 throw badRequest("unitPrice es obligatorio para ventas de producto");
             }
 
             validateUnitPrice(unitPrice);
 
+            InventoryProductEntity inventoryProduct = resolveInventoryProduct(inventoryProductId);
+            InventoryProductEntity updatedInventoryProduct = inventoryProductService.subtractStock(inventoryProduct, quantity);
+
             sale.setService(null);
-            sale.setItemName(itemName.trim());
+            sale.setInventoryProduct(updatedInventoryProduct);
+            sale.setItemName(updatedInventoryProduct.getName());
             sale.setUnitPrice(unitPrice);
         }
 
@@ -302,6 +314,14 @@ public class SaleServiceImpl implements SaleService {
 
         return serviceRepository.findById(serviceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + serviceId));
+    }
+
+    private InventoryProductEntity resolveInventoryProduct(Long inventoryProductId) {
+        if (inventoryProductId == null) {
+            throw badRequest("inventoryProductId es obligatorio para ventas de producto");
+        }
+
+        return inventoryProductService.getActiveProductEntityById(inventoryProductId);
     }
 
     private ClientEntity resolveClient(Long clientId) {
@@ -336,6 +356,15 @@ public class SaleServiceImpl implements SaleService {
         return value.trim();
     }
 
+    private void restoreInventoryStockIfNeeded(SaleEntity sale) {
+        if (sale.getInventoryProduct() == null) {
+            return;
+        }
+
+        inventoryProductService.addStock(sale.getInventoryProduct(), sale.getQuantity());
+        sale.setInventoryProduct(null);
+    }
+
     private ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
@@ -349,6 +378,7 @@ public class SaleServiceImpl implements SaleService {
                 .clientName(sale.getClientName())
                 .itemType(sale.getItemType())
                 .serviceId(sale.getService() != null ? sale.getService().getId() : null)
+                .inventoryProductId(sale.getInventoryProduct() != null ? sale.getInventoryProduct().getId() : null)
                 .itemName(sale.getItemName())
                 .unitPrice(sale.getUnitPrice())
                 .quantity(sale.getQuantity())

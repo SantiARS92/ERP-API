@@ -39,6 +39,10 @@ public class ExpenseEntity {
     @Column(length = 1000)
     private String notes;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "inventory_product_id")
+    private InventoryProductEntity inventoryProduct;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

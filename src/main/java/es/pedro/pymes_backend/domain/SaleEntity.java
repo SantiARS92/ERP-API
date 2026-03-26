@@ -45,6 +45,10 @@ public class SaleEntity {
     @JoinColumn(name = "service_id")
     private ServiceEntity service;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "inventory_product_id")
+    private InventoryProductEntity inventoryProduct;
+
     @Column(nullable = false)
     private String itemName;
 

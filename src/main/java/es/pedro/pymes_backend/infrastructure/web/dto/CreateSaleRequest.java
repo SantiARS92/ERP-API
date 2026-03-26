@@ -26,6 +26,8 @@ public class CreateSaleRequest {
 
     private Long serviceId;
 
+    private Long inventoryProductId;
+
     @Size(max = 255, message = "El nombre del producto no puede superar 255 caracteres")
     private String itemName;
 
