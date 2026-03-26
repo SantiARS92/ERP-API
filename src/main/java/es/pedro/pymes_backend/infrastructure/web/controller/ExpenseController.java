@@ -1,6 +1,7 @@
 package es.pedro.pymes_backend.infrastructure.web.controller;
 
 import es.pedro.pymes_backend.application.ExpenseService;
+import es.pedro.pymes_backend.domain.ExpenseCategory;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateExpenseRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ExpenseResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
@@ -65,9 +66,10 @@ public class ExpenseController {
     @GetMapping("/suggestions")
     public ResponseEntity<List<String>> getConceptSuggestions(
             @RequestParam String query,
+            @RequestParam(required = false) ExpenseCategory category,
             @RequestParam(defaultValue = "5") @Min(1) @Max(20) int limit
     ) {
-        return ResponseEntity.ok(expenseService.getConceptSuggestions(query, limit));
+        return ResponseEntity.ok(expenseService.getConceptSuggestions(query, category, limit));
     }
 
     @DeleteMapping("/{id}")

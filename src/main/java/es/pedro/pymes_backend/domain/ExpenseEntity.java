@@ -43,6 +43,9 @@ public class ExpenseEntity {
     @JoinColumn(name = "inventory_product_id")
     private InventoryProductEntity inventoryProduct;
 
+    @Column(name = "stock_movement_applied", nullable = false)
+    private Boolean stockMovementApplied;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -54,6 +57,9 @@ public class ExpenseEntity {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
+        if (this.stockMovementApplied == null) {
+            this.stockMovementApplied = true;
+        }
     }
 
     @PreUpdate

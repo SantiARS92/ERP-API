@@ -9,6 +9,7 @@ import es.pedro.pymes_backend.domain.SaleSourceType;
 import es.pedro.pymes_backend.domain.ServiceEntity;
 import es.pedro.pymes_backend.infrastructure.repository.CategoryRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ClientRepository;
+import es.pedro.pymes_backend.infrastructure.repository.ExpenseRepository;
 import es.pedro.pymes_backend.infrastructure.repository.InventoryProductRepository;
 import es.pedro.pymes_backend.infrastructure.repository.SaleRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ServiceRepository;
@@ -63,6 +64,9 @@ class ApiIntegrationSmokeTest {
 
     @Autowired
     private InventoryProductRepository inventoryProductRepository;
+
+    @Autowired
+    private ExpenseRepository expenseRepository;
 
     @Autowired
     private SaleRepository saleRepository;
@@ -206,6 +210,12 @@ class ApiIntegrationSmokeTest {
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].id").value(productId.intValue()));
 
+        assertThat(getStock(productId)).isEqualTo(15);
+        assertThat(expenseRepository.findAll().stream()
+                .filter(expense -> productName.equals(expense.getConcept()))
+                .toList())
+                .hasSize(1);
+
         mockMvc.perform(post("/api/expenses")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -224,11 +234,67 @@ class ApiIntegrationSmokeTest {
 
         assertThat(getStock(productId)).isEqualTo(20);
 
+        String freeConcept = unique("Proveedor");
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "expenseDate": "%s",
+                                  "concept": "%s",
+                                  "category": "OTHER",
+                                  "quantity": 1,
+                                  "amount": 35.00,
+                                  "notes": "Historico api"
+                                }
+                                """.formatted(BASE_DATE, freeConcept)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.concept").value(freeConcept))
+                .andExpect(jsonPath("$.category").value("OTHER"));
+
         mockMvc.perform(get("/api/expenses/suggestions")
                         .param("query", "champu")
+                        .param("category", "SUPPLIES")
                         .param("limit", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0]").value(productName));
+
+        mockMvc.perform(get("/api/expenses/suggestions")
+                        .param("query", "prove")
+                        .param("category", "OTHER")
+                        .param("limit", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value(freeConcept));
+
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "expenseDate": "%s",
+                                  "concept": "Producto inexistente api",
+                                  "category": "SUPPLIES",
+                                  "quantity": 2,
+                                  "amount": 10.00,
+                                  "notes": "Debe fallar"
+                                }
+                                """.formatted(BASE_DATE)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        mockMvc.perform(post("/api/inventory/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "%s",
+                                  "description": "Producto invalido",
+                                  "categoryId": %d,
+                                  "stock": 3,
+                                  "minimumStock": 1,
+                                  "sku": "INV-%s",
+                                  "purchasePrice": null
+                                }
+                                """.formatted(unique("SinPrecio"), category.getId(), UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
 
         mockMvc.perform(get("/api/inventory/products/export/pdf"))
                 .andExpect(status().isOk())
@@ -243,6 +309,74 @@ class ApiIntegrationSmokeTest {
                         .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void expensePromptManualCasesShouldSupportSuppliesSuggestionsExactMatchValidationAndFreeServicesText() throws Exception {
+        InventoryProductEntity firstProduct = saveProduct("Champ\u00fa Klorane", 8);
+        InventoryProductEntity secondProduct = saveProduct("Champ\u00fa L'Oreal Prof", 15);
+
+        mockMvc.perform(get("/api/expenses/suggestions")
+                        .param("query", "cha")
+                        .param("category", "SUPPLIES")
+                        .param("limit", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("Champ\u00fa Klorane"))
+                .andExpect(jsonPath("$[1]").value("Champ\u00fa L'Oreal Prof"));
+
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "expenseDate": "2026-03-26",
+                                  "concept": "Champ\u00fa L'Oreal Prof",
+                                  "category": "SUPPLIES",
+                                  "quantity": 5,
+                                  "amount": 120.00,
+                                  "notes": "Reposici\u00f3n"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.concept").value("Champ\u00fa L'Oreal Prof"))
+                .andExpect(jsonPath("$.category").value("SUPPLIES"));
+
+        assertThat(getStock(secondProduct.getId())).isEqualTo(20);
+
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "expenseDate": "2026-03-26",
+                                  "concept": "Compra champ\u00fa loreal",
+                                  "category": "SUPPLIES",
+                                  "quantity": 5,
+                                  "amount": 120.00,
+                                  "notes": "Reposici\u00f3n"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        assertThat(getStock(secondProduct.getId())).isEqualTo(20);
+
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "expenseDate": "2026-03-26",
+                                  "concept": "Factura luz marzo",
+                                  "category": "SERVICES",
+                                  "quantity": 1,
+                                  "amount": 450.00,
+                                  "notes": "Pago mensual"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.concept").value("Factura luz marzo"))
+                .andExpect(jsonPath("$.category").value("SERVICES"));
+
+        assertThat(getStock(firstProduct.getId())).isEqualTo(8);
+        assertThat(getStock(secondProduct.getId())).isEqualTo(20);
     }
 
     @Test

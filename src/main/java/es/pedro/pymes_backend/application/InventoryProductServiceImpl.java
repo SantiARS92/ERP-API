@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,11 +31,13 @@ public class InventoryProductServiceImpl implements InventoryProductService {
     private final InventoryProductRepository inventoryProductRepository;
     private final CategoryRepository categoryRepository;
     private final InventoryPdfService inventoryPdfService;
+    private final InventoryCreationExpenseRegistrar inventoryCreationExpenseRegistrar;
 
     @Override
     public InventoryProductResponse createProduct(CreateInventoryProductRequest request) {
         validateUniqueNameForCreate(request.getName());
         validateUniqueSkuForCreate(request.getSku());
+        validateInitialStockPurchasePrice(request.getStock(), request.getPurchasePrice());
 
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con id: " + request.getCategoryId()));
@@ -51,6 +54,7 @@ public class InventoryProductServiceImpl implements InventoryProductService {
                 .build();
 
         InventoryProductEntity saved = inventoryProductRepository.save(product);
+        registerInitialExpenseIfNeeded(saved);
         return mapToResponse(saved);
     }
 
@@ -98,6 +102,21 @@ public class InventoryProductServiceImpl implements InventoryProductService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Producto de inventario no encontrado con nombre: " + normalizedName
                 ));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getActiveProductNameSuggestions(String query, int limit) {
+        if (!StringUtils.hasText(query)) {
+            return List.of();
+        }
+
+        validatePositiveLimit(limit);
+
+        return inventoryProductRepository.findActiveNameSuggestions(
+                query.trim(),
+                PageRequest.of(0, limit)
+        );
     }
 
     @Override
@@ -212,6 +231,14 @@ public class InventoryProductServiceImpl implements InventoryProductService {
         }
     }
 
+    private void validateInitialStockPurchasePrice(Integer stock, BigDecimal purchasePrice) {
+        if (stock != null && stock > 0 && (purchasePrice == null || purchasePrice.compareTo(BigDecimal.ZERO) <= 0)) {
+            throw new BadRequestException(
+                    "Si el stock inicial es mayor que 0, el precio de compra debe ser mayor que 0 para generar el gasto inicial"
+            );
+        }
+    }
+
     private String normalizeText(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
@@ -230,6 +257,20 @@ public class InventoryProductServiceImpl implements InventoryProductService {
         if (quantity <= 0) {
             throw new BadRequestException("La cantidad a " + operation + " debe ser mayor que 0");
         }
+    }
+
+    private void validatePositiveLimit(int limit) {
+        if (limit <= 0) {
+            throw new BadRequestException("El lÃ­mite debe ser mayor que 0");
+        }
+    }
+
+    private void registerInitialExpenseIfNeeded(InventoryProductEntity product) {
+        if (product.getStock() == null || product.getStock() <= 0) {
+            return;
+        }
+
+        inventoryCreationExpenseRegistrar.registerInitialPurchaseExpense(product);
     }
 
     private InventoryProductEntity requireProduct(InventoryProductEntity product) {

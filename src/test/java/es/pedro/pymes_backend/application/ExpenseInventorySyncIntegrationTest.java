@@ -10,6 +10,7 @@ import es.pedro.pymes_backend.infrastructure.repository.InventoryProductReposito
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateExpenseRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ExpenseResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.UpdateExpenseRequest;
+import es.pedro.pymes_backend.infrastructure.web.exception.BadRequestException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,8 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -72,16 +75,39 @@ class ExpenseInventorySyncIntegrationTest {
     }
 
     @Test
-    void createSuppliesExpenseShouldNotChangeStockWhenProductDoesNotExist() {
+    void createSuppliesExpenseShouldFailWhenProductDoesNotExist() {
         InventoryProductEntity product = saveActiveProduct(MATCHING_PRODUCT_NAME, 15);
+        long countBefore = expenseRepository.count();
 
-        ExpenseResponse expense = expenseService.createExpense(
+        assertThatThrownBy(() -> expenseService.createExpense(
                 buildCreateRequest("Producto inexistente", ExpenseCategory.SUPPLIES, 5)
-        );
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("producto activo de inventario");
 
-        assertThat(expense.getId()).isNotNull();
         assertThat(getStock(product.getId())).isEqualTo(15);
-        assertThat(getExpense(expense.getId()).getInventoryProduct()).isNull();
+        assertThat(expenseRepository.count()).isEqualTo(countBefore);
+    }
+
+    @Test
+    void getSuppliesSuggestionsShouldUseActiveInventoryProductNames() {
+        saveActiveProduct("Champu Kerastase", 10);
+        saveActiveProduct("Champu L'Oreal Prof", 15);
+        expenseService.createExpense(buildCreateRequest("Proveedor habitual", ExpenseCategory.OTHER, 1));
+
+        List<String> suggestions = expenseService.getConceptSuggestions("champu", ExpenseCategory.SUPPLIES, 5);
+
+        assertThat(suggestions).containsExactly("Champu Kerastase", "Champu L'Oreal Prof");
+    }
+
+    @Test
+    void getNonSuppliesSuggestionsShouldKeepUsingExpenseHistory() {
+        saveActiveProduct(MATCHING_PRODUCT_NAME, 15);
+        expenseService.createExpense(buildCreateRequest("Proveedor habitual", ExpenseCategory.OTHER, 1));
+
+        List<String> suggestions = expenseService.getConceptSuggestions("prove", ExpenseCategory.OTHER, 5);
+
+        assertThat(suggestions).containsExactly("Proveedor habitual");
     }
 
     @Test
@@ -118,7 +144,7 @@ class ExpenseInventorySyncIntegrationTest {
     private InventoryProductEntity saveActiveProduct(String name, int stock) {
         CategoryEntity category = categoryRepository.saveAndFlush(
                 CategoryEntity.builder()
-                        .name("Cabello")
+                        .name("Cabello " + name)
                         .color("gold")
                         .icon("scissors")
                         .build()

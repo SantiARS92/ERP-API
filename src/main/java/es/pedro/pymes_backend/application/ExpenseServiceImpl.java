@@ -37,6 +37,7 @@ public class ExpenseServiceImpl implements ExpenseService {
                 .quantity(request.getQuantity())
                 .amount(request.getAmount())
                 .notes(normalizeNotes(request.getNotes()))
+                .stockMovementApplied(true)
                 .build();
 
         syncInventoryIfApplicable(expense);
@@ -49,6 +50,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     @Transactional
     public ExpenseResponse updateExpense(Long id, UpdateExpenseRequest request) {
         ExpenseEntity expense = getExpenseEntityById(id);
+        boolean stockMovementApplied = isStockMovementApplied(expense);
 
         revertInventorySyncIfNeeded(expense);
 
@@ -59,6 +61,7 @@ public class ExpenseServiceImpl implements ExpenseService {
         expense.setAmount(request.getAmount());
         expense.setNotes(normalizeNotes(request.getNotes()));
         expense.setInventoryProduct(null);
+        expense.setStockMovementApplied(stockMovementApplied);
 
         syncInventoryIfApplicable(expense);
 
@@ -123,13 +126,17 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     @Override
-    public List<String> getConceptSuggestions(String query, int limit) {
+    public List<String> getConceptSuggestions(String query, ExpenseCategory category, int limit) {
         if (!StringUtils.hasText(query)) {
             return List.of();
         }
 
         if (limit < 1) {
             throw new BadRequestException("El límite debe ser mayor que 0");
+        }
+
+        if (category == ExpenseCategory.SUPPLIES) {
+            return inventoryProductService.getActiveProductNameSuggestions(query.trim(), limit);
         }
 
         return expenseRepository.findConceptSuggestions(query.trim(), PageRequest.of(0, limit));
@@ -188,8 +195,10 @@ public class ExpenseServiceImpl implements ExpenseService {
             return;
         }
 
-        InventoryProductEntity inventoryProduct = findActiveInventoryProductByConcept(expense.getConcept());
-        if (inventoryProduct == null) {
+        InventoryProductEntity inventoryProduct = requireActiveInventoryProductByConcept(expense.getConcept());
+        expense.setInventoryProduct(inventoryProduct);
+
+        if (!isStockMovementApplied(expense)) {
             return;
         }
 
@@ -198,7 +207,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     private void revertInventorySyncIfNeeded(ExpenseEntity expense) {
-        if (expense.getInventoryProduct() == null) {
+        if (expense.getInventoryProduct() == null || !isStockMovementApplied(expense)) {
             return;
         }
 
@@ -206,12 +215,18 @@ public class ExpenseServiceImpl implements ExpenseService {
         expense.setInventoryProduct(null);
     }
 
-    private InventoryProductEntity findActiveInventoryProductByConcept(String concept) {
+    private InventoryProductEntity requireActiveInventoryProductByConcept(String concept) {
         try {
             return inventoryProductService.getActiveProductEntityByName(concept);
         } catch (ResourceNotFoundException ex) {
-            return null;
+            throw new BadRequestException(
+                    "Para gastos de suministros, el concepto debe coincidir con un producto activo de inventario"
+            );
         }
+    }
+
+    private boolean isStockMovementApplied(ExpenseEntity expense) {
+        return !Boolean.FALSE.equals(expense.getStockMovementApplied());
     }
 
     private ExpenseResponse mapToResponse(ExpenseEntity expense) {

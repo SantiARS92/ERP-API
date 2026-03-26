@@ -20,6 +20,8 @@ public interface InventoryProductService {
 
     InventoryProductEntity getActiveProductEntityByName(String name);
 
+    List<String> getActiveProductNameSuggestions(String query, int limit);
+
     PagedResponse<InventoryProductResponse> getProducts(String search, List<Long> categoryIds, int page, int size);
 
     InventoryProductEntity addStock(Long id, int quantity);

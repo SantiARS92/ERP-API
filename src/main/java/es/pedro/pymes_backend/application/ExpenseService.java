@@ -1,5 +1,6 @@
 package es.pedro.pymes_backend.application;
 
+import es.pedro.pymes_backend.domain.ExpenseCategory;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateExpenseRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ExpenseResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
@@ -20,7 +21,7 @@ public interface ExpenseService {
 
     List<ExpenseResponse> getRecentExpenses(int limit);
 
-    List<String> getConceptSuggestions(String query, int limit);
+    List<String> getConceptSuggestions(String query, ExpenseCategory category, int limit);
 
     void deleteExpense(Long id);
 
