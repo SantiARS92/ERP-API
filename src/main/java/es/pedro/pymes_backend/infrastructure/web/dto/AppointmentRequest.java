@@ -25,6 +25,8 @@ public class AppointmentRequest {
     @Positive
     private Double price;
 
+    private Long professionalId;
+
     private String professionalName;
 
     @NotNull

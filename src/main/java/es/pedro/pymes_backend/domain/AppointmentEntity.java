@@ -34,6 +34,8 @@ public class AppointmentEntity {
     @Column(nullable = false)
     private Double price;
 
+    private Long professionalId;
+
     private String professionalName;
 
     @Column(nullable = false)

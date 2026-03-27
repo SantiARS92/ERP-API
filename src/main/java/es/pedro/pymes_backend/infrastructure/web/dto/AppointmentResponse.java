@@ -21,6 +21,7 @@ public class AppointmentResponse {
 
     private Double price;
 
+    private Long professionalId;
     private String professionalName;
 
     private LocalDate appointmentDate;

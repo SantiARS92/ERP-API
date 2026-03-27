@@ -2,8 +2,10 @@ package es.pedro.pymes_backend.application;
 
 import es.pedro.pymes_backend.domain.AppointmentEntity;
 import es.pedro.pymes_backend.domain.AppointmentStatus;
+import es.pedro.pymes_backend.domain.ProfessionalEntity;
 import es.pedro.pymes_backend.infrastructure.repository.AppointmentRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ClientRepository;
+import es.pedro.pymes_backend.infrastructure.repository.ProfessionalRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ServiceRepository;
 import es.pedro.pymes_backend.domain.ClientEntity;
 import es.pedro.pymes_backend.domain.ServiceEntity;
@@ -25,6 +27,7 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final ClientRepository clientRepository;
     private final ServiceRepository serviceRepository;
+    private final ProfessionalRepository professionalRepository;
     private final SaleService saleService;
 
     public List<AppointmentResponse> getAppointments(LocalDate fromDate, LocalDate toDate) {
@@ -64,7 +67,7 @@ public class AppointmentService {
         appointment.setServiceName(service.getName());
 
         appointment.setPrice(request.getPrice());
-        appointment.setProfessionalName(request.getProfessionalName());
+        applyProfessionalData(appointment, request);
 
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setAppointmentTime(request.getAppointmentTime());
@@ -98,7 +101,7 @@ public class AppointmentService {
         appointment.setServiceName(service.getName());
 
         appointment.setPrice(request.getPrice());
-        appointment.setProfessionalName(request.getProfessionalName());
+        applyProfessionalData(appointment, request);
 
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setAppointmentTime(request.getAppointmentTime());
@@ -137,11 +140,28 @@ public class AppointmentService {
                 appointment.getServiceId(),
                 appointment.getServiceName(),
                 appointment.getPrice(),
+                appointment.getProfessionalId(),
                 appointment.getProfessionalName(),
                 appointment.getAppointmentDate(),
                 appointment.getAppointmentTime(),
                 appointment.getStatus(),
                 appointment.getInternalNotes()
         );
+    }
+
+    private void applyProfessionalData(AppointmentEntity appointment, AppointmentRequest request) {
+
+        if (request.getProfessionalId() == null) {
+            appointment.setProfessionalId(null);
+            appointment.setProfessionalName(request.getProfessionalName());
+            return;
+        }
+
+        ProfessionalEntity professional = professionalRepository
+                .findByIdAndActiveTrue(request.getProfessionalId())
+                .orElseThrow(() -> new ResourceNotFoundException("Profesional no encontrado o inactivo"));
+
+        appointment.setProfessionalId(professional.getId());
+        appointment.setProfessionalName(professional.getFullName());
     }
 }
