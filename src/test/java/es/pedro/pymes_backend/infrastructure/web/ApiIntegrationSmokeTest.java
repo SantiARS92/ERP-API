@@ -28,6 +28,7 @@ import org.springframework.web.context.WebApplicationContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -383,6 +384,7 @@ class ApiIntegrationSmokeTest {
     void salesApisShouldDiscountRestoreStockAndReportConflicts() throws Exception {
         ClientEntity client = saveClient("ClientSales");
         InventoryProductEntity product = saveProduct("ChampuSales", 20);
+        int recentDaysWindow = Math.max(1, (int) ChronoUnit.DAYS.between(BASE_DATE, LocalDate.now()) + 1);
 
         Long saleId = extractId(
                 mockMvc.perform(post("/api/sales")
@@ -445,7 +447,7 @@ class ApiIntegrationSmokeTest {
         assertThat(getStock(product.getId())).isEqualTo(16);
 
         mockMvc.perform(get("/api/sales/recent")
-                        .param("days", "7")
+                        .param("days", String.valueOf(recentDaysWindow))
                         .param("limit", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(saleId.intValue()));
