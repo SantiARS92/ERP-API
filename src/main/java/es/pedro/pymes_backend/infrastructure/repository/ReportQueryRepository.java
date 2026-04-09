@@ -1,12 +1,8 @@
 package es.pedro.pymes_backend.infrastructure.repository;
 
-import es.pedro.pymes_backend.domain.AppointmentEntity;
 import es.pedro.pymes_backend.domain.AppointmentStatus;
-import es.pedro.pymes_backend.domain.InventoryProductEntity;
-import es.pedro.pymes_backend.domain.SaleEntity;
 import es.pedro.pymes_backend.domain.SaleItemType;
 import es.pedro.pymes_backend.domain.SaleSourceType;
-import es.pedro.pymes_backend.domain.ServiceEntity;
 import es.pedro.pymes_backend.infrastructure.repository.report.DayOfWeekAppointmentCountReportRow;
 import es.pedro.pymes_backend.infrastructure.repository.report.MonthlyAmountReportRow;
 import es.pedro.pymes_backend.infrastructure.repository.report.MonthlyCountReportRow;
@@ -24,29 +20,15 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 @Repository
 @Transactional(readOnly = true)
 public class ReportQueryRepository {
-
-    private static final Comparator<ServiceMonthlyPerformanceReportRow> SERVICE_RANKING_COMPARATOR =
-            Comparator.comparingLong(ServiceMonthlyPerformanceReportRow::confirmedAppointments)
-                    .reversed()
-                    .thenComparing(ServiceMonthlyPerformanceReportRow::generatedIncome, Comparator.reverseOrder())
-                    .thenComparing(row -> row.serviceName() == null ? "" : row.serviceName(), String.CASE_INSENSITIVE_ORDER);
-
-    private static final Comparator<ProductMonthlyRankingReportRow> PRODUCT_RANKING_COMPARATOR =
-            Comparator.comparingLong(ProductMonthlyRankingReportRow::unitsSold)
-                    .reversed()
-                    .thenComparing(ProductMonthlyRankingReportRow::generatedIncome, Comparator.reverseOrder())
-                    .thenComparing(row -> row.productName() == null ? "" : row.productName(), String.CASE_INSENSITIVE_ORDER);
 
     private final EntityManager entityManager;
 
@@ -110,8 +92,10 @@ public class ReportQueryRepository {
         }
 
         DateRange dateRange = monthRange(month, month);
-        for (LocalDate appointmentDate : findConfirmedAppointmentDatesBetween(dateRange.fromDate(), dateRange.toDate())) {
-            totalsByDay.merge(appointmentDate.getDayOfWeek(), 1L, Long::sum);
+        for (Tuple row : findConfirmedAppointmentCountsByDayOfWeekBetween(dateRange.fromDate(), dateRange.toDate())) {
+            DayOfWeek dayOfWeek = toJavaDayOfWeek(row.get("dayOfWeekValue", Number.class));
+            Long count = row.get("countValue", Long.class);
+            totalsByDay.put(dayOfWeek, count != null ? count : 0L);
         }
 
         List<DayOfWeekAppointmentCountReportRow> rows = new ArrayList<>(DayOfWeek.values().length);
@@ -125,98 +109,55 @@ public class ReportQueryRepository {
         Objects.requireNonNull(month, "month is required");
 
         DateRange dateRange = monthRange(month, month);
-        List<AppointmentEntity> confirmedAppointments = findConfirmedAppointmentsBetween(dateRange.fromDate(), dateRange.toDate());
-        if (confirmedAppointments.isEmpty()) {
-            return List.of();
-        }
-
-        Map<Long, ServiceAccumulator> servicesById = new LinkedHashMap<>();
-        for (AppointmentEntity appointment : confirmedAppointments) {
-            if (appointment.getServiceId() == null) {
-                continue;
-            }
-
-            ServiceAccumulator accumulator = servicesById.computeIfAbsent(
-                    appointment.getServiceId(),
-                    ignored -> new ServiceAccumulator(appointment.getServiceId(), appointment.getServiceName())
-            );
-            accumulator.registerAppointment(appointment.getServiceName());
-        }
-
-        if (servicesById.isEmpty()) {
-            return List.of();
-        }
-
-        // AppointmentEntity only stores serviceId/serviceName, so metadata is resolved separately by id.
-        Map<Long, ServiceMetadata> metadataByServiceId = loadServiceMetadata(servicesById.keySet());
-        Map<Long, BigDecimal> incomeByServiceId = loadAppointmentServiceIncome(servicesById.keySet(), dateRange.fromDate(), dateRange.toDate());
-
-        return servicesById.values().stream()
-                .map(accumulator -> {
-                    ServiceMetadata metadata = metadataByServiceId.get(accumulator.serviceId);
-                    String serviceName = metadata != null ? metadata.serviceName : accumulator.snapshotName;
-                    String categoryName = metadata != null ? metadata.categoryName : null;
-                    Integer durationMinutes = metadata != null ? metadata.durationMinutes : null;
-                    BigDecimal generatedIncome = incomeByServiceId.getOrDefault(accumulator.serviceId, BigDecimal.ZERO);
-
-                    return new ServiceMonthlyPerformanceReportRow(
-                            accumulator.serviceId,
-                            serviceName,
-                            categoryName,
-                            durationMinutes,
-                            accumulator.confirmedAppointments,
-                            generatedIncome
-                    );
-                })
-                .sorted(SERVICE_RANKING_COMPARATOR)
-                .toList();
+        return entityManager.createQuery("""
+                        select new es.pedro.pymes_backend.infrastructure.repository.report.ServiceMonthlyPerformanceReportRow(
+                            srv.id,
+                            srv.name,
+                            category.name,
+                            srv.durationMinutes,
+                            count(s.id),
+                            sum(s.totalAmount)
+                        )
+                        from SaleEntity s
+                        join s.service srv
+                        left join srv.category category
+                        where s.itemType = :serviceType
+                          and s.sourceType = :sourceType
+                          and s.saleDate between :fromDate and :toDate
+                        group by srv.id, srv.name, category.name, srv.durationMinutes
+                        order by count(s.id) desc, sum(s.totalAmount) desc, lower(srv.name) asc
+                        """, ServiceMonthlyPerformanceReportRow.class)
+                .setParameter("serviceType", SaleItemType.SERVICE)
+                .setParameter("sourceType", SaleSourceType.APPOINTMENT)
+                .setParameter("fromDate", dateRange.fromDate())
+                .setParameter("toDate", dateRange.toDate())
+                .getResultList();
     }
 
     public List<ProductMonthlyRankingReportRow> findProductRankingOfMonth(YearMonth month) {
         Objects.requireNonNull(month, "month is required");
 
         DateRange dateRange = monthRange(month, month);
-        List<SaleEntity> productSales = findProductSalesBetween(dateRange.fromDate(), dateRange.toDate());
-        if (productSales.isEmpty()) {
-            return List.of();
-        }
-
-        Map<Long, ProductAccumulator> productsById = new LinkedHashMap<>();
-        for (SaleEntity sale : productSales) {
-            if (sale.getInventoryProduct() == null || sale.getInventoryProduct().getId() == null) {
-                continue;
-            }
-
-            Long productId = sale.getInventoryProduct().getId();
-            ProductAccumulator accumulator = productsById.computeIfAbsent(
-                    productId,
-                    ignored -> new ProductAccumulator(productId, sale.getItemName())
-            );
-            accumulator.registerSale(sale.getItemName(), sale.getQuantity(), sale.getTotalAmount());
-        }
-
-        if (productsById.isEmpty()) {
-            return List.of();
-        }
-
-        Map<Long, ProductMetadata> metadataByProductId = loadProductMetadata(productsById.keySet());
-
-        return productsById.values().stream()
-                .map(accumulator -> {
-                    ProductMetadata metadata = metadataByProductId.get(accumulator.productId);
-                    String productName = metadata != null ? metadata.productName : accumulator.snapshotName;
-                    String categoryName = metadata != null ? metadata.categoryName : null;
-
-                    return new ProductMonthlyRankingReportRow(
-                            accumulator.productId,
-                            productName,
-                            categoryName,
-                            accumulator.unitsSold,
-                            accumulator.generatedIncome
-                    );
-                })
-                .sorted(PRODUCT_RANKING_COMPARATOR)
-                .toList();
+        return entityManager.createQuery("""
+                        select new es.pedro.pymes_backend.infrastructure.repository.report.ProductMonthlyRankingReportRow(
+                            product.id,
+                            product.name,
+                            category.name,
+                            sum(s.quantity),
+                            sum(s.totalAmount)
+                        )
+                        from SaleEntity s
+                        join s.inventoryProduct product
+                        left join product.category category
+                        where s.itemType = :productType
+                          and s.saleDate between :fromDate and :toDate
+                        group by product.id, product.name, category.name
+                        order by sum(s.quantity) desc, sum(s.totalAmount) desc, lower(product.name) asc
+                        """, ProductMonthlyRankingReportRow.class)
+                .setParameter("productType", SaleItemType.PRODUCT)
+                .setParameter("fromDate", dateRange.fromDate())
+                .setParameter("toDate", dateRange.toDate())
+                .getResultList();
     }
 
     public List<MonthlyOperationalSummaryReportRow> findMonthlyOperationalSummary(YearMonth fromMonth, YearMonth toMonth) {
@@ -243,10 +184,10 @@ public class ReportQueryRepository {
         DateRange dateRange = monthRange(fromMonth, toMonth);
         LinkedHashMap<YearMonth, BigDecimal> totals = initializeAmountBuckets(fromMonth, toMonth);
 
-        for (Tuple row : findSaleAmountRowsBetween(dateRange.fromDate(), dateRange.toDate())) {
-            LocalDate businessDate = row.get("businessDate", LocalDate.class);
+        for (Tuple row : findMonthlySaleAmountRowsBetween(dateRange.fromDate(), dateRange.toDate())) {
+            YearMonth month = toYearMonth(row);
             BigDecimal amount = row.get("amount", BigDecimal.class);
-            totals.merge(YearMonth.from(businessDate), amountOrZero(amount), BigDecimal::add);
+            totals.put(month, amountOrZero(amount));
         }
 
         return totals;
@@ -256,10 +197,10 @@ public class ReportQueryRepository {
         DateRange dateRange = monthRange(fromMonth, toMonth);
         LinkedHashMap<YearMonth, BigDecimal> totals = initializeAmountBuckets(fromMonth, toMonth);
 
-        for (Tuple row : findExpenseAmountRowsBetween(dateRange.fromDate(), dateRange.toDate())) {
-            LocalDate businessDate = row.get("businessDate", LocalDate.class);
+        for (Tuple row : findMonthlyExpenseAmountRowsBetween(dateRange.fromDate(), dateRange.toDate())) {
+            YearMonth month = toYearMonth(row);
             BigDecimal amount = row.get("amount", BigDecimal.class);
-            totals.merge(YearMonth.from(businessDate), amountOrZero(amount), BigDecimal::add);
+            totals.put(month, amountOrZero(amount));
         }
 
         return totals;
@@ -269,161 +210,103 @@ public class ReportQueryRepository {
         DateRange dateRange = monthRange(fromMonth, toMonth);
         LinkedHashMap<YearMonth, Long> totals = initializeCountBuckets(fromMonth, toMonth);
 
-        for (LocalDate appointmentDate : findConfirmedAppointmentDatesBetween(dateRange.fromDate(), dateRange.toDate())) {
-            totals.merge(YearMonth.from(appointmentDate), 1L, Long::sum);
+        for (Tuple row : findMonthlyConfirmedAppointmentRowsBetween(dateRange.fromDate(), dateRange.toDate())) {
+            YearMonth month = toYearMonth(row);
+            Long count = row.get("countValue", Long.class);
+            totals.put(month, count != null ? count : 0L);
         }
 
         return totals;
     }
 
-    private List<Tuple> findSaleAmountRowsBetween(LocalDate fromDate, LocalDate toDate) {
+    private List<Tuple> findMonthlySaleAmountRowsBetween(LocalDate fromDate, LocalDate toDate) {
         return entityManager.createQuery("""
-                        select s.saleDate as businessDate, s.totalAmount as amount
+                        select
+                            year(s.saleDate) as yearValue,
+                            month(s.saleDate) as monthValue,
+                            sum(s.totalAmount) as amount
                         from SaleEntity s
                         where s.saleDate between :fromDate and :toDate
-                        order by s.saleDate asc
+                        group by year(s.saleDate), month(s.saleDate)
+                        order by year(s.saleDate) asc, month(s.saleDate) asc
                         """, Tuple.class)
                 .setParameter("fromDate", fromDate)
                 .setParameter("toDate", toDate)
                 .getResultList();
     }
 
-    private List<Tuple> findExpenseAmountRowsBetween(LocalDate fromDate, LocalDate toDate) {
+    private List<Tuple> findMonthlyExpenseAmountRowsBetween(LocalDate fromDate, LocalDate toDate) {
         return entityManager.createQuery("""
-                        select e.expenseDate as businessDate, e.amount as amount
+                        select
+                            year(e.expenseDate) as yearValue,
+                            month(e.expenseDate) as monthValue,
+                            sum(e.amount) as amount
                         from ExpenseEntity e
                         where e.expenseDate between :fromDate and :toDate
-                        order by e.expenseDate asc
+                        group by year(e.expenseDate), month(e.expenseDate)
+                        order by year(e.expenseDate) asc, month(e.expenseDate) asc
                         """, Tuple.class)
                 .setParameter("fromDate", fromDate)
                 .setParameter("toDate", toDate)
                 .getResultList();
     }
 
-    private List<AppointmentEntity> findConfirmedAppointmentsBetween(LocalDate fromDate, LocalDate toDate) {
+    private List<Tuple> findMonthlyConfirmedAppointmentRowsBetween(LocalDate fromDate, LocalDate toDate) {
         return entityManager.createQuery("""
-                        select a
+                        select
+                            year(a.appointmentDate) as yearValue,
+                            month(a.appointmentDate) as monthValue,
+                            count(a.id) as countValue
                         from AppointmentEntity a
                         where a.status = :status
                           and a.appointmentDate between :fromDate and :toDate
-                        order by a.appointmentDate asc, a.appointmentTime asc
-                        """, AppointmentEntity.class)
-                .setParameter("status", AppointmentStatus.CONFIRMED)
-                .setParameter("fromDate", fromDate)
-                .setParameter("toDate", toDate)
-                .getResultList();
-    }
-
-    private List<LocalDate> findConfirmedAppointmentDatesBetween(LocalDate fromDate, LocalDate toDate) {
-        return entityManager.createQuery("""
-                        select a.appointmentDate
-                        from AppointmentEntity a
-                        where a.status = :status
-                          and a.appointmentDate between :fromDate and :toDate
-                        order by a.appointmentDate asc, a.appointmentTime asc
-                        """, LocalDate.class)
-                .setParameter("status", AppointmentStatus.CONFIRMED)
-                .setParameter("fromDate", fromDate)
-                .setParameter("toDate", toDate)
-                .getResultList();
-    }
-
-    private List<SaleEntity> findProductSalesBetween(LocalDate fromDate, LocalDate toDate) {
-        return entityManager.createQuery("""
-                        select s
-                        from SaleEntity s
-                        where s.itemType = :productType
-                          and s.inventoryProduct is not null
-                          and s.saleDate between :fromDate and :toDate
-                        order by s.saleDate asc, s.saleTime asc
-                        """, SaleEntity.class)
-                .setParameter("productType", SaleItemType.PRODUCT)
-                .setParameter("fromDate", fromDate)
-                .setParameter("toDate", toDate)
-                .getResultList();
-    }
-
-    private Map<Long, BigDecimal> loadAppointmentServiceIncome(Set<Long> serviceIds, LocalDate fromDate, LocalDate toDate) {
-        if (serviceIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, BigDecimal> incomeByServiceId = new LinkedHashMap<>();
-        List<Tuple> rows = entityManager.createQuery("""
-                        select s.service.id as serviceId, sum(s.totalAmount) as amount
-                        from SaleEntity s
-                        where s.itemType = :serviceType
-                          and s.sourceType = :sourceType
-                          and s.service is not null
-                          and s.service.id in :serviceIds
-                          and s.saleDate between :fromDate and :toDate
-                        group by s.service.id
+                        group by year(a.appointmentDate), month(a.appointmentDate)
+                        order by year(a.appointmentDate) asc, month(a.appointmentDate) asc
                         """, Tuple.class)
-                .setParameter("serviceType", SaleItemType.SERVICE)
-                .setParameter("sourceType", SaleSourceType.APPOINTMENT)
-                .setParameter("serviceIds", serviceIds)
+                .setParameter("status", AppointmentStatus.CONFIRMED)
                 .setParameter("fromDate", fromDate)
                 .setParameter("toDate", toDate)
                 .getResultList();
-
-        for (Tuple row : rows) {
-            Long serviceId = row.get("serviceId", Long.class);
-            BigDecimal amount = row.get("amount", BigDecimal.class);
-            if (serviceId != null) {
-                incomeByServiceId.put(serviceId, amountOrZero(amount));
-            }
-        }
-
-        return incomeByServiceId;
     }
 
-    private Map<Long, ServiceMetadata> loadServiceMetadata(Set<Long> serviceIds) {
-        if (serviceIds.isEmpty()) {
-            return Map.of();
-        }
-
-        List<ServiceEntity> services = entityManager.createQuery("""
-                        select distinct s
-                        from ServiceEntity s
-                        left join fetch s.category
-                        where s.id in :serviceIds
-                        """, ServiceEntity.class)
-                .setParameter("serviceIds", serviceIds)
+    private List<Tuple> findConfirmedAppointmentCountsByDayOfWeekBetween(LocalDate fromDate, LocalDate toDate) {
+        return entityManager.createQuery("""
+                        select
+                            extract(day of week from a.appointmentDate) as dayOfWeekValue,
+                            count(a.id) as countValue
+                        from AppointmentEntity a
+                        where a.status = :status
+                          and a.appointmentDate between :fromDate and :toDate
+                        group by extract(day of week from a.appointmentDate)
+                        order by extract(day of week from a.appointmentDate) asc
+                        """, Tuple.class)
+                .setParameter("status", AppointmentStatus.CONFIRMED)
+                .setParameter("fromDate", fromDate)
+                .setParameter("toDate", toDate)
                 .getResultList();
-
-        Map<Long, ServiceMetadata> metadataByServiceId = new LinkedHashMap<>();
-        for (ServiceEntity service : services) {
-            metadataByServiceId.put(service.getId(), new ServiceMetadata(
-                    service.getName(),
-                    service.getCategory() != null ? service.getCategory().getName() : null,
-                    service.getDurationMinutes()
-            ));
-        }
-        return metadataByServiceId;
     }
 
-    private Map<Long, ProductMetadata> loadProductMetadata(Set<Long> productIds) {
-        if (productIds.isEmpty()) {
-            return Map.of();
+    private YearMonth toYearMonth(Tuple row) {
+        Number yearValue = row.get("yearValue", Number.class);
+        Number monthValue = row.get("monthValue", Number.class);
+        return YearMonth.of(yearValue.intValue(), monthValue.intValue());
+    }
+
+    private DayOfWeek toJavaDayOfWeek(Number hqlDayOfWeek) {
+        if (hqlDayOfWeek == null) {
+            throw new IllegalArgumentException("dayOfWeekValue is required");
         }
 
-        List<InventoryProductEntity> products = entityManager.createQuery("""
-                        select distinct p
-                        from InventoryProductEntity p
-                        left join fetch p.category
-                        where p.id in :productIds
-                        """, InventoryProductEntity.class)
-                .setParameter("productIds", productIds)
-                .getResultList();
-
-        Map<Long, ProductMetadata> metadataByProductId = new LinkedHashMap<>();
-        for (InventoryProductEntity product : products) {
-            metadataByProductId.put(product.getId(), new ProductMetadata(
-                    product.getName(),
-                    product.getCategory() != null ? product.getCategory().getName() : null
-            ));
-        }
-        return metadataByProductId;
+        return switch (hqlDayOfWeek.intValue()) {
+            case 1 -> DayOfWeek.MONDAY;
+            case 2 -> DayOfWeek.TUESDAY;
+            case 3 -> DayOfWeek.WEDNESDAY;
+            case 4 -> DayOfWeek.THURSDAY;
+            case 5 -> DayOfWeek.FRIDAY;
+            case 6 -> DayOfWeek.SATURDAY;
+            case 7 -> DayOfWeek.SUNDAY;
+            default -> throw new IllegalArgumentException("Unsupported dayOfWeekValue: " + hqlDayOfWeek);
+        };
     }
 
     private List<MonthlyAmountReportRow> toMonthlyAmountRows(LinkedHashMap<YearMonth, BigDecimal> totalsByMonth) {
@@ -488,51 +371,5 @@ public class ReportQueryRepository {
     }
 
     private record DateRange(LocalDate fromDate, LocalDate toDate) {
-    }
-
-    private record ServiceMetadata(String serviceName, String categoryName, Integer durationMinutes) {
-    }
-
-    private record ProductMetadata(String productName, String categoryName) {
-    }
-
-    private static final class ServiceAccumulator {
-
-        private final Long serviceId;
-        private String snapshotName;
-        private long confirmedAppointments;
-
-        private ServiceAccumulator(Long serviceId, String snapshotName) {
-            this.serviceId = serviceId;
-            this.snapshotName = snapshotName;
-        }
-
-        private void registerAppointment(String serviceName) {
-            if (this.snapshotName == null || this.snapshotName.isBlank()) {
-                this.snapshotName = serviceName;
-            }
-            this.confirmedAppointments++;
-        }
-    }
-
-    private static final class ProductAccumulator {
-
-        private final Long productId;
-        private String snapshotName;
-        private long unitsSold;
-        private BigDecimal generatedIncome = BigDecimal.ZERO;
-
-        private ProductAccumulator(Long productId, String snapshotName) {
-            this.productId = productId;
-            this.snapshotName = snapshotName;
-        }
-
-        private void registerSale(String productName, Integer quantity, BigDecimal totalAmount) {
-            if (this.snapshotName == null || this.snapshotName.isBlank()) {
-                this.snapshotName = productName;
-            }
-            this.unitsSold += quantity != null ? quantity.longValue() : 0L;
-            this.generatedIncome = this.generatedIncome.add(totalAmount != null ? totalAmount : BigDecimal.ZERO);
-        }
     }
 }

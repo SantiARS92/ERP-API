@@ -30,6 +30,9 @@ public class ProfessionalRequest {
     @Size(max = 150, message = "El email no puede superar los 150 caracteres")
     private String email;
 
+    @Size(max = 150, message = "La clave de acceso no puede superar los 150 caracteres")
+    private String accessPassword;
+
     @NotNull(message = "El estado del profesional es obligatorio")
     private Boolean active;
 }

@@ -16,5 +16,6 @@ public class ProfessionalResponse {
     private String specialty;
     private String phone;
     private String email;
+    private Boolean hasAccessPassword;
     private Boolean active;
 }

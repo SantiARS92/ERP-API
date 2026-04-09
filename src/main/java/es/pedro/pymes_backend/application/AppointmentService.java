@@ -3,6 +3,7 @@ package es.pedro.pymes_backend.application;
 import es.pedro.pymes_backend.domain.AppointmentEntity;
 import es.pedro.pymes_backend.domain.AppointmentStatus;
 import es.pedro.pymes_backend.domain.ProfessionalEntity;
+import es.pedro.pymes_backend.infrastructure.repository.AppointmentListProjection;
 import es.pedro.pymes_backend.infrastructure.repository.AppointmentRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ClientRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ProfessionalRepository;
@@ -12,9 +13,9 @@ import es.pedro.pymes_backend.domain.ServiceEntity;
 import es.pedro.pymes_backend.infrastructure.web.dto.AppointmentRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.AppointmentResponse;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -30,8 +31,8 @@ public class AppointmentService {
     private final ProfessionalRepository professionalRepository;
     private final SaleService saleService;
 
+    @Transactional(readOnly = true)
     public List<AppointmentResponse> getAppointments(LocalDate fromDate, LocalDate toDate) {
-
         return appointmentRepository
                 .findByAppointmentDateBetween(fromDate, toDate)
                 .stream()
@@ -39,6 +40,7 @@ public class AppointmentService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public AppointmentResponse getAppointment(Long id) {
 
         AppointmentEntity appointment = appointmentRepository
@@ -132,7 +134,23 @@ public class AppointmentService {
     }
 
     private AppointmentResponse mapToResponse(AppointmentEntity appointment) {
+        return new AppointmentResponse(
+                appointment.getId(),
+                appointment.getClientId(),
+                appointment.getClientName(),
+                appointment.getServiceId(),
+                appointment.getServiceName(),
+                appointment.getPrice(),
+                appointment.getProfessionalId(),
+                appointment.getProfessionalName(),
+                appointment.getAppointmentDate(),
+                appointment.getAppointmentTime(),
+                appointment.getStatus(),
+                appointment.getInternalNotes()
+        );
+    }
 
+    private AppointmentResponse mapToResponse(AppointmentListProjection appointment) {
         return new AppointmentResponse(
                 appointment.getId(),
                 appointment.getClientId(),

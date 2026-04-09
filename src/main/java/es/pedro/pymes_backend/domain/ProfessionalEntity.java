@@ -30,6 +30,9 @@ public class ProfessionalEntity {
     @Column(length = 150)
     private String email;
 
+    @Column(length = 255)
+    private String passwordHash;
+
     @Column(nullable = false)
     private Boolean active = true;
 }

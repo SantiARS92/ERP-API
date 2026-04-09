@@ -54,17 +54,9 @@ public class ReportsService {
         YearMonth previousMonth = targetMonth.minusMonths(1);
         YearMonth firstChartMonth = targetMonth.minusMonths(2);
 
-        ReportPeriodTotals currentTotals = reportQueryRepository.findPeriodTotals(
-                targetMonth.atDay(1),
-                targetMonth.atEndOfMonth()
-        );
-
-        ReportPeriodTotals previousTotals = reportQueryRepository.findPeriodTotals(
-                previousMonth.atDay(1),
-                previousMonth.atEndOfMonth()
-        );
-
         List<SummaryMonth> lastThreeMonthsSummary = buildSummarySeries(firstChartMonth, targetMonth);
+        SummaryMonth currentMonthSummary = findSummaryMonth(lastThreeMonthsSummary, targetMonth);
+        SummaryMonth previousMonthSummary = findSummaryMonth(lastThreeMonthsSummary, previousMonth);
 
         Map<YearMonth, Long> appointmentsByMonth = reportQueryRepository
                 .findMonthlyConfirmedAppointmentsEvolution(firstChartMonth, targetMonth)
@@ -73,6 +65,9 @@ public class ReportsService {
                         MonthlyCountReportRow::month,
                         MonthlyCountReportRow::count
                 ));
+
+        long currentConfirmedAppointments = appointmentsByMonth.getOrDefault(targetMonth, 0L);
+        long previousConfirmedAppointments = appointmentsByMonth.getOrDefault(previousMonth, 0L);
 
         List<MonthlyReportPointResponse> lastThreeMonths = lastThreeMonthsSummary.stream()
                 .map(row -> new MonthlyReportPointResponse(
@@ -90,19 +85,19 @@ public class ReportsService {
                 .map(this::toRankingItemForTopServices)
                 .toList();
 
-        List<BusiestDayReportResponse> busiestDays = buildBusiestDays(targetMonth, currentTotals.confirmedAppointments());
+        List<BusiestDayReportResponse> busiestDays = buildBusiestDays(targetMonth, currentConfirmedAppointments);
 
         return new MonthlySimpleReportResponse(
                 year,
                 month,
-                scale(currentTotals.totalSales()),
-                scale(currentTotals.totalExpenses()),
-                currentTotals.confirmedAppointments(),
-                calculateChangePercentage(currentTotals.totalSales(), previousTotals.totalSales()),
-                calculateChangePercentage(currentTotals.totalExpenses(), previousTotals.totalExpenses()),
+                currentMonthSummary.income(),
+                currentMonthSummary.expenses(),
+                currentConfirmedAppointments,
+                calculateChangePercentage(currentMonthSummary.income(), previousMonthSummary.income()),
+                calculateChangePercentage(currentMonthSummary.expenses(), previousMonthSummary.expenses()),
                 calculateChangePercentage(
-                        BigDecimal.valueOf(currentTotals.confirmedAppointments()),
-                        BigDecimal.valueOf(previousTotals.confirmedAppointments())
+                        BigDecimal.valueOf(currentConfirmedAppointments),
+                        BigDecimal.valueOf(previousConfirmedAppointments)
                 ),
                 lastThreeMonths,
                 topServices,
@@ -394,6 +389,13 @@ public class ReportsService {
                         calculatePercentage(row.confirmedAppointments(), totalConfirmedAppointments)
                 ))
                 .toList();
+    }
+
+    private SummaryMonth findSummaryMonth(List<SummaryMonth> rows, YearMonth month) {
+        return rows.stream()
+                .filter(row -> row.month().equals(month))
+                .findFirst()
+                .orElseGet(() -> new SummaryMonth(month, zero(), zero(), zero()));
     }
 
     private List<SummaryMonth> buildSummarySeries(YearMonth startMonth, YearMonth endMonth) {

@@ -21,9 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.context.WebApplicationContext;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -34,6 +32,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -45,14 +44,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class ApiIntegrationSmokeTest {
+class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
 
     private static final Pattern ID_PATTERN = Pattern.compile("\"id\"\\s*:\\s*(\\d+)");
     private static final LocalDate BASE_DATE = LocalDate.of(2026, 3, 26);
     private static final LocalTime BASE_TIME = LocalTime.of(10, 30);
-
-    @Autowired
-    private WebApplicationContext webApplicationContext;
 
     @Autowired
     private CategoryRepository categoryRepository;
@@ -75,8 +71,8 @@ class ApiIntegrationSmokeTest {
     private MockMvc mockMvc;
 
     @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+    void setUp() throws Exception {
+        mockMvc = buildAuthenticatedMockMvc();
     }
 
     @Test
@@ -383,8 +379,32 @@ class ApiIntegrationSmokeTest {
     @Test
     void salesApisShouldDiscountRestoreStockAndReportConflicts() throws Exception {
         ClientEntity client = saveClient("ClientSales");
+        CategoryEntity serviceCategory = saveCategory("ServiceSales");
+        ServiceEntity service = saveService("Servicio Sales Api", 42.0, serviceCategory);
         InventoryProductEntity product = saveProduct("ChampuSales", 20);
         int recentDaysWindow = Math.max(1, (int) ChronoUnit.DAYS.between(BASE_DATE, LocalDate.now()) + 1);
+
+        mockMvc.perform(post("/api/sales")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientId": %d,
+                                  "itemType": "SERVICE",
+                                  "serviceId": %d,
+                                  "quantity": 1,
+                                  "saleDate": "%s",
+                                  "saleTime": "%s",
+                                  "notes": "Venta servicio api"
+                                }
+                                """.formatted(client.getId(), service.getId(), BASE_DATE, BASE_TIME.minusHours(1))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.serviceId").value(service.getId().intValue()))
+                .andExpect(jsonPath("$.inventoryProductId").value(nullValue()))
+                .andExpect(jsonPath("$.itemName").value(service.getName()))
+                .andExpect(jsonPath("$.unitPrice").value(42.0))
+                .andExpect(jsonPath("$.totalAmount").value(42.0));
+
+        assertThat(getStock(product.getId())).isEqualTo(20);
 
         Long saleId = extractId(
                 mockMvc.perform(post("/api/sales")
@@ -509,6 +529,30 @@ class ApiIntegrationSmokeTest {
         assertThat(appointmentSale.getItemType()).isEqualTo(SaleItemType.SERVICE);
         assertThat(appointmentSale.getInventoryProduct()).isNull();
         assertThat(getStock(product.getId())).isEqualTo(9);
+
+        mockMvc.perform(put("/api/appointments/{id}", appointmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "clientId": %d,
+                                  "serviceId": %d,
+                                  "price": 35.0,
+                                  "professionalName": "Laura",
+                                  "appointmentDate": "%s",
+                                  "appointmentTime": "%s",
+                                  "status": "CONFIRMED",
+                                  "internalNotes": "Cita reconfirmada"
+                                }
+                                """.formatted(client.getId(), service.getId(), BASE_DATE, BASE_TIME.plusHours(2))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        assertThat(saleRepository.findAll().stream()
+                .filter(sale -> appointmentId.equals(sale.getAppointmentId()))
+                .toList())
+                .hasSize(1);
+        assertThat(saleRepository.findByAppointmentId(appointmentId).orElseThrow().getId())
+                .isEqualTo(appointmentSale.getId());
 
         mockMvc.perform(delete("/api/sales/{id}", appointmentSale.getId()))
                 .andExpect(status().isConflict())

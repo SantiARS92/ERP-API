@@ -28,9 +28,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.context.WebApplicationContext;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -47,10 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class ReportsApiIntegrationTest {
-
-    @Autowired
-    private WebApplicationContext webApplicationContext;
+class ReportsApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
 
     @Autowired
     private CategoryRepository categoryRepository;
@@ -82,8 +77,8 @@ class ReportsApiIntegrationTest {
     private InventoryProductEntity shampooProduct;
 
     @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+    void setUp() throws Exception {
+        mockMvc = buildAuthenticatedMockMvc();
         seedReportsData();
     }
 
