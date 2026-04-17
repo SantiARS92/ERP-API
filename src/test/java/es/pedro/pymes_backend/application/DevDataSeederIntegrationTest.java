@@ -88,6 +88,10 @@ class DevDataSeederIntegrationTest {
                 .satisfies(client -> {
                     assertThat(client.getPhone()).isEmpty();
                     assertThat(client.getEmail()).isNull();
+                    assertThat(client.getAcceptsInvoices()).isFalse();
+                    assertThat(client.getAddress()).isNull();
+                    assertThat(client.getCifNif()).isNull();
+                    assertThat(client.getIdentificador()).isNull();
                 });
 
         assertThat(professionalRepository.findByActiveOrderByFullNameAsc(true)).hasSize(6);

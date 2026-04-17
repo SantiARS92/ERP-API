@@ -29,4 +29,16 @@ public class ClientEntity {
 
     @Column
     private String email;
+
+    @Column(name = "accepts_invoices")
+    private Boolean acceptsInvoices = false;
+
+    @Column
+    private String address;
+
+    @Column(name = "cif_nif")
+    private String cifNif;
+
+    @Column(name = "identificador")
+    private Long identificador;
 }

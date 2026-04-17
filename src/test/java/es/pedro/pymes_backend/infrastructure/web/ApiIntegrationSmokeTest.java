@@ -13,6 +13,7 @@ import es.pedro.pymes_backend.infrastructure.repository.ExpenseRepository;
 import es.pedro.pymes_backend.infrastructure.repository.InventoryProductRepository;
 import es.pedro.pymes_backend.infrastructure.repository.SaleRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ServiceRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
 
     private static final Pattern ID_PATTERN = Pattern.compile("\"id\"\\s*:\\s*(\\d+)");
+    private static final Pattern IDENTIFICADOR_PATTERN = Pattern.compile("\"identificador\"\\s*:\\s*(\\d+)");
     private static final LocalDate BASE_DATE = LocalDate.of(2026, 3, 26);
     private static final LocalTime BASE_TIME = LocalTime.of(10, 30);
 
@@ -67,6 +69,9 @@ class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
 
     @Autowired
     private SaleRepository saleRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private MockMvc mockMvc;
 
@@ -173,6 +178,82 @@ class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
         mockMvc.perform(delete("/api/categories/{id}", categoryId))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void clientApiShouldSupportInvoiceFieldsAndClearThemWhenDisabled() throws Exception {
+        ensureClientIdentifierSequence();
+
+        mockMvc.perform(post("/api/clients")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "%s",
+                                  "phone": "600111222",
+                                  "email": "missing.invoice@test.com",
+                                  "admiteFacturas": true
+                                }
+                                """.formatted(unique("ClientInvoiceInvalid"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        String clientName = unique("ClientInvoice");
+        MvcResult createResult = mockMvc.perform(post("/api/clients")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "%s",
+                                  "phone": "600111222",
+                                  "email": "invoice.client@test.com",
+                                  "admiteFacturas": true,
+                                  "direccion": "Calle Mayor 1",
+                                  "cifNif": "B12345678"
+                                }
+                                """.formatted(clientName)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.admiteFacturas").value(true))
+                .andExpect(jsonPath("$.direccion").value("Calle Mayor 1"))
+                .andExpect(jsonPath("$.cifNif").value("B12345678"))
+                .andExpect(jsonPath("$.identificador").isNumber())
+                .andReturn();
+
+        Long clientId = extractId(createResult);
+        Long identificador = extractIdentificador(createResult);
+
+        mockMvc.perform(put("/api/clients/{id}", clientId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "%s",
+                                  "phone": "600333444",
+                                  "email": "invoice.client.updated@test.com",
+                                  "admiteFacturas": true,
+                                  "direccion": "Avenida Norte 2",
+                                  "cifNif": "B87654321"
+                                }
+                                """.formatted(clientName)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.identificador").value(identificador.intValue()))
+                .andExpect(jsonPath("$.direccion").value("Avenida Norte 2"))
+                .andExpect(jsonPath("$.cifNif").value("B87654321"));
+
+        mockMvc.perform(put("/api/clients/{id}", clientId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "%s",
+                                  "phone": "600333444",
+                                  "email": "invoice.client.updated@test.com",
+                                  "admiteFacturas": false,
+                                  "direccion": "No debe guardarse",
+                                  "cifNif": "No debe guardarse"
+                                }
+                                """.formatted(clientName)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.admiteFacturas").value(false))
+                .andExpect(jsonPath("$.direccion").value(nullValue()))
+                .andExpect(jsonPath("$.cifNif").value(nullValue()))
+                .andExpect(jsonPath("$.identificador").value(nullValue()));
     }
 
     @Test
@@ -585,6 +666,19 @@ class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
             throw new IllegalStateException("No se pudo extraer el id de la respuesta: " + result.getResponse().getContentAsString());
         }
         return Long.parseLong(matcher.group(1));
+    }
+
+    private Long extractIdentificador(MvcResult result) throws Exception {
+        Matcher matcher = IDENTIFICADOR_PATTERN.matcher(result.getResponse().getContentAsString());
+        if (!matcher.find()) {
+            throw new IllegalStateException("No se pudo extraer el identificador de la respuesta: " + result.getResponse().getContentAsString());
+        }
+        return Long.parseLong(matcher.group(1));
+    }
+
+    private void ensureClientIdentifierSequence() {
+        entityManager.createNativeQuery("CREATE SEQUENCE IF NOT EXISTS clients_identificador_seq START WITH 1 INCREMENT BY 1")
+                .executeUpdate();
     }
 
     private String unique(String prefix) {

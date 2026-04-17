@@ -1,5 +1,6 @@
 package es.pedro.pymes_backend.infrastructure.web.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -19,4 +20,12 @@ public class ClientRequest {
 
     @Email(message = "El email debe tener un formato válido")
     private String email;
+
+    @JsonProperty("admiteFacturas")
+    private Boolean acceptsInvoices;
+
+    @JsonProperty("direccion")
+    private String address;
+
+    private String cifNif;
 }

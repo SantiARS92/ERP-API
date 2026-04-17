@@ -1,5 +1,6 @@
 package es.pedro.pymes_backend.infrastructure.web.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -11,4 +12,13 @@ public class ClientResponse {
     private String fullName;
     private String phone;
     private String email;
+
+    @JsonProperty("admiteFacturas")
+    private Boolean acceptsInvoices;
+
+    @JsonProperty("direccion")
+    private String address;
+
+    private String cifNif;
+    private Long identificador;
 }
