@@ -4,6 +4,7 @@ import es.pedro.pymes_backend.domain.AppointmentEntity;
 import es.pedro.pymes_backend.domain.AppointmentStatus;
 import es.pedro.pymes_backend.domain.ClientEntity;
 import es.pedro.pymes_backend.domain.InventoryProductEntity;
+import es.pedro.pymes_backend.domain.InventoryProductVariantEntity;
 import es.pedro.pymes_backend.domain.PaymentMethod;
 import es.pedro.pymes_backend.domain.SaleEntity;
 import es.pedro.pymes_backend.domain.SaleItemType;
@@ -61,6 +62,7 @@ public class SaleServiceImpl implements SaleService {
                 request.getItemType(),
                 request.getServiceId(),
                 request.getInventoryProductId(),
+                request.getInventoryProductVariantId(),
                 request.getItemName(),
                 request.getUnitPrice(),
                 request.getQuantity(),
@@ -89,6 +91,7 @@ public class SaleServiceImpl implements SaleService {
                 request.getItemType(),
                 request.getServiceId(),
                 request.getInventoryProductId(),
+                request.getInventoryProductVariantId(),
                 request.getItemName(),
                 request.getUnitPrice(),
                 request.getQuantity(),
@@ -223,6 +226,7 @@ public class SaleServiceImpl implements SaleService {
         sale.setItemType(SaleItemType.SERVICE);
         sale.setService(service);
         sale.setInventoryProduct(null);
+        sale.setInventoryProductVariant(null);
         sale.setItemName(appointment.getServiceName());
         sale.setUnitPrice(unitPrice);
         sale.setQuantity(1);
@@ -250,6 +254,7 @@ public class SaleServiceImpl implements SaleService {
             SaleItemType itemType,
             Long serviceId,
             Long inventoryProductId,
+            Long inventoryProductVariantId,
             String itemName,
             BigDecimal unitPrice,
             Integer quantity,
@@ -274,6 +279,7 @@ public class SaleServiceImpl implements SaleService {
         sale.setItemType(itemType);
 
         if (itemType == SaleItemType.SERVICE) {
+            validateServiceSaleReferences(inventoryProductId, inventoryProductVariantId);
             ServiceEntity service = resolveService(serviceId);
             BigDecimal resolvedUnitPrice = unitPrice != null ? unitPrice : BigDecimal.valueOf(service.getPrice());
 
@@ -281,6 +287,7 @@ public class SaleServiceImpl implements SaleService {
 
             sale.setService(service);
             sale.setInventoryProduct(null);
+            sale.setInventoryProductVariant(null);
             sale.setItemName(service.getName());
             sale.setUnitPrice(resolvedUnitPrice);
         } else {
@@ -290,13 +297,9 @@ public class SaleServiceImpl implements SaleService {
 
             validateUnitPrice(unitPrice);
 
-            InventoryProductEntity inventoryProduct = resolveInventoryProduct(inventoryProductId);
-            InventoryProductEntity updatedInventoryProduct = inventoryProductService.subtractStock(inventoryProduct, quantity);
-
             sale.setService(null);
-            sale.setInventoryProduct(updatedInventoryProduct);
-            sale.setItemName(updatedInventoryProduct.getName());
             sale.setUnitPrice(unitPrice);
+            applyProductSaleData(sale, inventoryProductId, inventoryProductVariantId, quantity);
         }
 
         sale.setQuantity(quantity);
@@ -322,6 +325,63 @@ public class SaleServiceImpl implements SaleService {
         }
 
         return inventoryProductService.getActiveProductEntityById(inventoryProductId);
+    }
+
+    private InventoryProductVariantEntity resolveInventoryProductVariant(Long inventoryProductVariantId) {
+        if (inventoryProductVariantId == null) {
+            throw badRequest("inventoryProductVariantId es obligatorio para ventas de producto con variantes");
+        }
+
+        return inventoryProductService.getActiveProductVariantEntityById(inventoryProductVariantId);
+    }
+
+    private void validateServiceSaleReferences(Long inventoryProductId, Long inventoryProductVariantId) {
+        if (inventoryProductId != null || inventoryProductVariantId != null) {
+            throw badRequest("Las ventas de servicio no pueden incluir producto ni variante de inventario");
+        }
+    }
+
+    private void applyProductSaleData(
+            SaleEntity sale,
+            Long inventoryProductId,
+            Long inventoryProductVariantId,
+            Integer quantity
+    ) {
+        if (inventoryProductVariantId != null) {
+            InventoryProductVariantEntity variant = resolveInventoryProductVariant(inventoryProductVariantId);
+            InventoryProductEntity product = variant.getProduct();
+
+            if (!Boolean.TRUE.equals(product.getHasVariants())) {
+                throw badRequest("La variante seleccionada no pertenece a un producto con variantes");
+            }
+            if (inventoryProductId != null && !inventoryProductId.equals(product.getId())) {
+                throw badRequest("inventoryProductId no coincide con el producto base de la variante");
+            }
+
+            InventoryProductVariantEntity updatedVariant = inventoryProductService.subtractVariantStock(variant, quantity);
+            sale.setInventoryProduct(updatedVariant.getProduct());
+            sale.setInventoryProductVariant(updatedVariant);
+            sale.setItemName(buildVariantItemName(updatedVariant));
+            return;
+        }
+
+        if (inventoryProductId == null) {
+            throw badRequest("inventoryProductId o inventoryProductVariantId es obligatorio para ventas de producto");
+        }
+
+        InventoryProductEntity inventoryProduct = resolveInventoryProduct(inventoryProductId);
+        if (Boolean.TRUE.equals(inventoryProduct.getHasVariants())) {
+            throw badRequest("inventoryProductVariantId es obligatorio para vender un producto con variantes");
+        }
+
+        InventoryProductEntity updatedInventoryProduct = inventoryProductService.subtractStock(inventoryProduct, quantity);
+        sale.setInventoryProduct(updatedInventoryProduct);
+        sale.setInventoryProductVariant(null);
+        sale.setItemName(updatedInventoryProduct.getName());
+    }
+
+    private String buildVariantItemName(InventoryProductVariantEntity variant) {
+        return variant.getProduct().getName() + " - " + variant.getVariantLabel();
     }
 
     private ClientEntity resolveClient(Long clientId) {
@@ -357,6 +417,13 @@ public class SaleServiceImpl implements SaleService {
     }
 
     private void restoreInventoryStockIfNeeded(SaleEntity sale) {
+        if (sale.getInventoryProductVariant() != null) {
+            inventoryProductService.addVariantStock(sale.getInventoryProductVariant(), sale.getQuantity());
+            sale.setInventoryProductVariant(null);
+            sale.setInventoryProduct(null);
+            return;
+        }
+
         if (sale.getInventoryProduct() == null) {
             return;
         }
@@ -379,6 +446,9 @@ public class SaleServiceImpl implements SaleService {
                 .itemType(sale.getItemType())
                 .serviceId(sale.getService() != null ? sale.getService().getId() : null)
                 .inventoryProductId(sale.getInventoryProduct() != null ? sale.getInventoryProduct().getId() : null)
+                .inventoryProductVariantId(sale.getInventoryProductVariant() != null ? sale.getInventoryProductVariant().getId() : null)
+                .inventoryProductVariantLabel(sale.getInventoryProductVariant() != null ? sale.getInventoryProductVariant().getVariantLabel() : null)
+                .inventoryProductVariantSku(sale.getInventoryProductVariant() != null ? sale.getInventoryProductVariant().getSku() : null)
                 .itemName(sale.getItemName())
                 .unitPrice(sale.getUnitPrice())
                 .quantity(sale.getQuantity())

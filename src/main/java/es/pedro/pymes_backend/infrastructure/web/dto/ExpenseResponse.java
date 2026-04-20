@@ -32,6 +32,14 @@ public class ExpenseResponse {
 
     private String notes;
 
+    private Long inventoryProductId;
+
+    private Long inventoryProductVariantId;
+
+    private String inventoryProductVariantLabel;
+
+    private String inventoryProductVariantSku;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

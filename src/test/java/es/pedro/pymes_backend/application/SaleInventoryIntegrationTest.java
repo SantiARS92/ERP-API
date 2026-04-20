@@ -5,6 +5,7 @@ import es.pedro.pymes_backend.domain.AppointmentStatus;
 import es.pedro.pymes_backend.domain.CategoryEntity;
 import es.pedro.pymes_backend.domain.ClientEntity;
 import es.pedro.pymes_backend.domain.InventoryProductEntity;
+import es.pedro.pymes_backend.domain.InventoryProductVariantEntity;
 import es.pedro.pymes_backend.domain.SaleEntity;
 import es.pedro.pymes_backend.domain.SaleItemType;
 import es.pedro.pymes_backend.domain.SaleSourceType;
@@ -12,6 +13,7 @@ import es.pedro.pymes_backend.domain.ServiceEntity;
 import es.pedro.pymes_backend.infrastructure.repository.CategoryRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ClientRepository;
 import es.pedro.pymes_backend.infrastructure.repository.InventoryProductRepository;
+import es.pedro.pymes_backend.infrastructure.repository.InventoryProductVariantRepository;
 import es.pedro.pymes_backend.infrastructure.repository.SaleRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ServiceRepository;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateSaleRequest;
@@ -23,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -49,6 +52,9 @@ class SaleInventoryIntegrationTest {
 
     @Autowired
     private InventoryProductRepository inventoryProductRepository;
+
+    @Autowired
+    private InventoryProductVariantRepository inventoryProductVariantRepository;
 
     @Autowired
     private CategoryRepository categoryRepository;
@@ -108,6 +114,136 @@ class SaleInventoryIntegrationTest {
     }
 
     @Test
+    void createManualVariantProductSaleShouldDiscountVariantStockAndKeepBaseProductLink() {
+        ClientEntity client = saveClient("Cliente variante");
+        InventoryProductEntity product = saveVariantProduct("Camiseta Basica");
+        InventoryProductVariantEntity variant = saveVariant(product, "Roja / M", "CAM-RO-M", 8);
+
+        SaleResponse sale = saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductId(product.getId())
+                        .inventoryProductVariantId(variant.getId())
+                        .unitPrice(new BigDecimal("19.90"))
+                        .quantity(3)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        );
+
+        assertThat(sale.getInventoryProductId()).isEqualTo(product.getId());
+        assertThat(sale.getInventoryProductVariantId()).isEqualTo(variant.getId());
+        assertThat(sale.getInventoryProductVariantLabel()).isEqualTo("Roja / M");
+        assertThat(sale.getInventoryProductVariantSku()).isEqualTo("CAM-RO-M");
+        assertThat(sale.getItemName()).isEqualTo("Camiseta Basica - Roja / M");
+        assertThat(getStock(product.getId())).isZero();
+        assertThat(getVariantStock(variant.getId())).isEqualTo(5);
+
+        SaleEntity persistedSale = getSale(sale.getId());
+        assertThat(persistedSale.getInventoryProduct()).isNotNull();
+        assertThat(persistedSale.getInventoryProduct().getId()).isEqualTo(product.getId());
+        assertThat(persistedSale.getInventoryProductVariant()).isNotNull();
+        assertThat(persistedSale.getInventoryProductVariant().getId()).isEqualTo(variant.getId());
+    }
+
+    @Test
+    void createManualVariantProductSaleCanDeriveBaseProductFromVariant() {
+        ClientEntity client = saveClient("Cliente variante derivada");
+        InventoryProductEntity product = saveVariantProduct("Tornillo Galvanizado");
+        InventoryProductVariantEntity variant = saveVariant(product, "4mm / 20mm", "TOR-4-20", 6);
+
+        SaleResponse sale = saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductVariantId(variant.getId())
+                        .unitPrice(new BigDecimal("1.50"))
+                        .quantity(2)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        );
+
+        assertThat(sale.getInventoryProductId()).isEqualTo(product.getId());
+        assertThat(sale.getInventoryProductVariantId()).isEqualTo(variant.getId());
+        assertThat(sale.getItemName()).isEqualTo("Tornillo Galvanizado - 4mm / 20mm");
+        assertThat(getVariantStock(variant.getId())).isEqualTo(4);
+    }
+
+    @Test
+    void createManualProductSaleShouldRequireVariantWhenProductHasVariants() {
+        ClientEntity client = saveClient("Cliente sin variante");
+        InventoryProductEntity product = saveVariantProduct("Camiseta Obligatoria");
+        saveVariant(product, "Azul / L", "CAM-AZ-L", 5);
+
+        assertThatThrownBy(() -> saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductId(product.getId())
+                        .unitPrice(new BigDecimal("19.90"))
+                        .quantity(1)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("inventoryProductVariantId es obligatorio");
+
+        assertThat(getVariantStockByProduct(product.getId())).isEqualTo(5);
+    }
+
+    @Test
+    void createManualVariantProductSaleShouldRejectMismatchedProductId() {
+        ClientEntity client = saveClient("Cliente variante producto distinto");
+        InventoryProductEntity product = saveVariantProduct("Camiseta Correcta");
+        InventoryProductEntity otherProduct = saveProduct("Producto Incorrecto", 5);
+        InventoryProductVariantEntity variant = saveVariant(product, "Roja / L", "CAM-RO-L", 5);
+
+        assertThatThrownBy(() -> saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductId(otherProduct.getId())
+                        .inventoryProductVariantId(variant.getId())
+                        .unitPrice(new BigDecimal("19.90"))
+                        .quantity(1)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("no coincide");
+
+        assertThat(getVariantStock(variant.getId())).isEqualTo(5);
+        assertThat(getStock(otherProduct.getId())).isEqualTo(5);
+    }
+
+    @Test
+    void createManualVariantProductSaleShouldReturnConflictWhenQuantityExceedsVariantStock() {
+        ClientEntity client = saveClient("Cliente variante sin stock");
+        InventoryProductEntity product = saveVariantProduct("Camiseta Sin Stock");
+        InventoryProductVariantEntity variant = saveVariant(product, "Blanca / S", "CAM-BL-S", 2);
+
+        assertThatThrownBy(() -> saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductVariantId(variant.getId())
+                        .unitPrice(new BigDecimal("19.90"))
+                        .quantity(5)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("No hay stock suficiente para la variante con id: " + variant.getId());
+
+        assertThat(getVariantStock(variant.getId())).isEqualTo(2);
+    }
+
+    @Test
     void createManualServiceSaleShouldNotTouchInventory() {
         ClientEntity client = saveClient("Cliente servicio");
         InventoryProductEntity product = saveProduct("Mascarilla", 9);
@@ -127,6 +263,7 @@ class SaleInventoryIntegrationTest {
         );
 
         assertThat(sale.getInventoryProductId()).isNull();
+        assertThat(sale.getInventoryProductVariantId()).isNull();
         assertThat(sale.getServiceId()).isEqualTo(service.getId());
         assertThat(sale.getItemName()).isEqualTo(service.getName());
         assertThat(getStock(product.getId())).isEqualTo(9);
@@ -168,6 +305,85 @@ class SaleInventoryIntegrationTest {
     }
 
     @Test
+    void updateProductSaleShouldRestoreSimpleStockAndDiscountVariantStock() {
+        ClientEntity client = saveClient("Cliente update variante");
+        InventoryProductEntity simpleProduct = saveProduct("Serum Simple", 10);
+        InventoryProductEntity variantProduct = saveVariantProduct("Camiseta Cambio");
+        InventoryProductVariantEntity variant = saveVariant(variantProduct, "Azul / M", "CAM-AZ-M", 6);
+
+        SaleResponse createdSale = saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductId(simpleProduct.getId())
+                        .unitPrice(new BigDecimal("8.00"))
+                        .quantity(2)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        );
+
+        SaleResponse updatedSale = saleService.updateSale(
+                createdSale.getId(),
+                UpdateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductId(variantProduct.getId())
+                        .inventoryProductVariantId(variant.getId())
+                        .unitPrice(new BigDecimal("18.00"))
+                        .quantity(3)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME.plusHours(1))
+                        .build()
+        );
+
+        assertThat(updatedSale.getInventoryProductId()).isEqualTo(variantProduct.getId());
+        assertThat(updatedSale.getInventoryProductVariantId()).isEqualTo(variant.getId());
+        assertThat(updatedSale.getItemName()).isEqualTo("Camiseta Cambio - Azul / M");
+        assertThat(getStock(simpleProduct.getId())).isEqualTo(10);
+        assertThat(getVariantStock(variant.getId())).isEqualTo(3);
+    }
+
+    @Test
+    void updateProductSaleShouldRestoreVariantStockAndDiscountSimpleStock() {
+        ClientEntity client = saveClient("Cliente update simple");
+        InventoryProductEntity variantProduct = saveVariantProduct("Camiseta Original");
+        InventoryProductVariantEntity variant = saveVariant(variantProduct, "Negra / L", "CAM-NE-L", 7);
+        InventoryProductEntity simpleProduct = saveProduct("Aceite Simple", 9);
+
+        SaleResponse createdSale = saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductVariantId(variant.getId())
+                        .unitPrice(new BigDecimal("18.00"))
+                        .quantity(3)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        );
+
+        SaleResponse updatedSale = saleService.updateSale(
+                createdSale.getId(),
+                UpdateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductId(simpleProduct.getId())
+                        .unitPrice(new BigDecimal("9.00"))
+                        .quantity(4)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME.plusHours(1))
+                        .build()
+        );
+
+        assertThat(updatedSale.getInventoryProductId()).isEqualTo(simpleProduct.getId());
+        assertThat(updatedSale.getInventoryProductVariantId()).isNull();
+        assertThat(updatedSale.getItemName()).isEqualTo(simpleProduct.getName());
+        assertThat(getVariantStock(variant.getId())).isEqualTo(7);
+        assertThat(getStock(simpleProduct.getId())).isEqualTo(5);
+    }
+
+    @Test
     void deleteManualProductSaleShouldRestoreStock() {
         ClientEntity client = saveClient("Cliente delete");
         InventoryProductEntity product = saveProduct("Serum", 12);
@@ -187,6 +403,30 @@ class SaleInventoryIntegrationTest {
         saleService.deleteSale(sale.getId());
 
         assertThat(getStock(product.getId())).isEqualTo(12);
+        assertThat(saleRepository.findById(sale.getId())).isEmpty();
+    }
+
+    @Test
+    void deleteManualVariantProductSaleShouldRestoreVariantStock() {
+        ClientEntity client = saveClient("Cliente delete variante");
+        InventoryProductEntity product = saveVariantProduct("Camiseta Delete");
+        InventoryProductVariantEntity variant = saveVariant(product, "Verde / S", "CAM-VE-S", 9);
+
+        SaleResponse sale = saleService.createManualSale(
+                CreateSaleRequest.builder()
+                        .clientId(client.getId())
+                        .itemType(SaleItemType.PRODUCT)
+                        .inventoryProductVariantId(variant.getId())
+                        .unitPrice(new BigDecimal("17.00"))
+                        .quantity(4)
+                        .saleDate(SALE_DATE)
+                        .saleTime(SALE_TIME)
+                        .build()
+        );
+
+        saleService.deleteSale(sale.getId());
+
+        assertThat(getVariantStock(variant.getId())).isEqualTo(9);
         assertThat(saleRepository.findById(sale.getId())).isEmpty();
     }
 
@@ -250,6 +490,43 @@ class SaleInventoryIntegrationTest {
         );
     }
 
+    private InventoryProductEntity saveVariantProduct(String name) {
+        CategoryEntity category = saveCategory();
+
+        return inventoryProductRepository.saveAndFlush(
+                InventoryProductEntity.builder()
+                        .name(name)
+                        .description("Producto con variantes test")
+                        .category(category)
+                        .stock(0)
+                        .minimumStock(0)
+                        .sku(null)
+                        .purchasePrice(null)
+                        .hasVariants(true)
+                        .active(true)
+                        .build()
+        );
+    }
+
+    private InventoryProductVariantEntity saveVariant(
+            InventoryProductEntity product,
+            String variantLabel,
+            String sku,
+            int stock
+    ) {
+        return inventoryProductVariantRepository.saveAndFlush(
+                InventoryProductVariantEntity.builder()
+                        .product(product)
+                        .variantLabel(variantLabel)
+                        .sku(sku)
+                        .stock(stock)
+                        .minimumStock(1)
+                        .purchasePrice(new BigDecimal("4.00"))
+                        .active(true)
+                        .build()
+        );
+    }
+
     private ServiceEntity saveService(String name, double price) {
         CategoryEntity category = saveCategory();
 
@@ -279,6 +556,19 @@ class SaleInventoryIntegrationTest {
         return inventoryProductRepository.findById(productId)
                 .orElseThrow()
                 .getStock();
+    }
+
+    private int getVariantStock(Long variantId) {
+        return inventoryProductVariantRepository.findById(variantId)
+                .orElseThrow()
+                .getStock();
+    }
+
+    private int getVariantStockByProduct(Long productId) {
+        return inventoryProductVariantRepository.findByProductIdAndActiveTrueOrderByVariantLabelAscIdAsc(productId)
+                .stream()
+                .mapToInt(InventoryProductVariantEntity::getStock)
+                .sum();
     }
 
     private SaleEntity getSale(Long saleId) {

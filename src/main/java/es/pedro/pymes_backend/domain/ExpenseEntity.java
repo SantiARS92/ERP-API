@@ -13,7 +13,8 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_expenses_date_id", columnList = "expense_date, id"),
                 @Index(name = "idx_expenses_category_date", columnList = "category, expense_date"),
-                @Index(name = "idx_expenses_inventory_product", columnList = "inventory_product_id")
+                @Index(name = "idx_expenses_inventory_product", columnList = "inventory_product_id"),
+                @Index(name = "idx_expenses_inventory_product_variant", columnList = "inventory_product_variant_id")
         }
 )
 @Getter
@@ -49,6 +50,10 @@ public class ExpenseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "inventory_product_id")
     private InventoryProductEntity inventoryProduct;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "inventory_product_variant_id")
+    private InventoryProductVariantEntity inventoryProductVariant;
 
     @Column(name = "stock_movement_applied", nullable = false)
     private Boolean stockMovementApplied;

@@ -3,6 +3,7 @@ package es.pedro.pymes_backend.application;
 import es.pedro.pymes_backend.domain.ExpenseCategory;
 import es.pedro.pymes_backend.domain.ExpenseEntity;
 import es.pedro.pymes_backend.domain.InventoryProductEntity;
+import es.pedro.pymes_backend.domain.InventoryProductVariantEntity;
 import es.pedro.pymes_backend.infrastructure.repository.ExpenseRepository;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateExpenseRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ExpenseResponse;
@@ -40,7 +41,13 @@ public class ExpenseServiceImpl implements ExpenseService {
                 .stockMovementApplied(true)
                 .build();
 
-        syncInventoryIfApplicable(expense);
+        syncInventoryIfApplicable(
+                expense,
+                request.getInventoryProductId(),
+                request.getInventoryProductVariantId(),
+                null,
+                null
+        );
 
         ExpenseEntity saved = expenseRepository.save(expense);
         return mapToResponse(saved);
@@ -51,6 +58,8 @@ public class ExpenseServiceImpl implements ExpenseService {
     public ExpenseResponse updateExpense(Long id, UpdateExpenseRequest request) {
         ExpenseEntity expense = getExpenseEntityById(id);
         boolean stockMovementApplied = isStockMovementApplied(expense);
+        InventoryProductEntity previousInventoryProduct = expense.getInventoryProduct();
+        InventoryProductVariantEntity previousInventoryProductVariant = expense.getInventoryProductVariant();
 
         revertInventorySyncIfNeeded(expense);
 
@@ -61,9 +70,16 @@ public class ExpenseServiceImpl implements ExpenseService {
         expense.setAmount(request.getAmount());
         expense.setNotes(normalizeNotes(request.getNotes()));
         expense.setInventoryProduct(null);
+        expense.setInventoryProductVariant(null);
         expense.setStockMovementApplied(stockMovementApplied);
 
-        syncInventoryIfApplicable(expense);
+        syncInventoryIfApplicable(
+                expense,
+                request.getInventoryProductId(),
+                request.getInventoryProductVariantId(),
+                previousInventoryProduct,
+                previousInventoryProductVariant
+        );
 
         ExpenseEntity updated = expenseRepository.save(expense);
         return mapToResponse(updated);
@@ -150,12 +166,6 @@ public class ExpenseServiceImpl implements ExpenseService {
         revertInventorySyncIfNeeded(expense);
 
         expenseRepository.delete(expense);
-
-        /*
-         * FUTURO:
-         * Si category == SUPPLIES y este gasto impactó inventario,
-         * aquí habrá que revertir el stock asociado.
-         */
     }
 
     @Override
@@ -188,15 +198,68 @@ public class ExpenseServiceImpl implements ExpenseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Gasto no encontrado con id: " + id));
     }
 
-    private void syncInventoryIfApplicable(ExpenseEntity expense) {
+    private void syncInventoryIfApplicable(
+            ExpenseEntity expense,
+            Long inventoryProductId,
+            Long inventoryProductVariantId,
+            InventoryProductEntity previousInventoryProduct,
+            InventoryProductVariantEntity previousInventoryProductVariant
+    ) {
         expense.setInventoryProduct(null);
+        expense.setInventoryProductVariant(null);
 
         if (expense.getCategory() != ExpenseCategory.SUPPLIES) {
+            validateNoInventoryReferencesForNonSupplies(inventoryProductId, inventoryProductVariantId);
             return;
         }
 
-        InventoryProductEntity inventoryProduct = requireActiveInventoryProductByConcept(expense.getConcept());
+        if (inventoryProductVariantId != null) {
+            syncVariantExpense(expense, inventoryProductId, inventoryProductVariantId);
+            return;
+        }
+
+        if (inventoryProductId != null) {
+            syncSimpleProductExpense(expense, inventoryProductService.getActiveProductEntityById(inventoryProductId));
+            return;
+        }
+
+        if (reattachAutomaticInventoryReference(
+                expense,
+                previousInventoryProduct,
+                previousInventoryProductVariant
+        )) {
+            return;
+        }
+
+        syncSimpleProductExpense(expense, requireActiveInventoryProductByConcept(expense.getConcept()));
+    }
+
+    private void syncVariantExpense(ExpenseEntity expense, Long inventoryProductId, Long inventoryProductVariantId) {
+        InventoryProductVariantEntity variant = inventoryProductService
+                .getActiveProductVariantEntityById(inventoryProductVariantId);
+        InventoryProductEntity product = variant.getProduct();
+
+        validateVariantProductMatch(product, inventoryProductId);
+
+        expense.setConcept(buildVariantConcept(variant));
+        expense.setInventoryProduct(product);
+        expense.setInventoryProductVariant(variant);
+
+        if (!isStockMovementApplied(expense)) {
+            return;
+        }
+
+        InventoryProductVariantEntity updatedVariant = inventoryProductService.addVariantStock(variant, expense.getQuantity());
+        expense.setInventoryProduct(product);
+        expense.setInventoryProductVariant(updatedVariant);
+    }
+
+    private void syncSimpleProductExpense(ExpenseEntity expense, InventoryProductEntity inventoryProduct) {
+        validateSimpleInventoryProduct(inventoryProduct);
+
+        expense.setConcept(inventoryProduct.getName());
         expense.setInventoryProduct(inventoryProduct);
+        expense.setInventoryProductVariant(null);
 
         if (!isStockMovementApplied(expense)) {
             return;
@@ -207,12 +270,21 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     private void revertInventorySyncIfNeeded(ExpenseEntity expense) {
-        if (expense.getInventoryProduct() == null || !isStockMovementApplied(expense)) {
+        if (!isStockMovementApplied(expense)) {
             return;
         }
 
-        inventoryProductService.subtractStock(expense.getInventoryProduct(), expense.getQuantity());
-        expense.setInventoryProduct(null);
+        if (expense.getInventoryProductVariant() != null) {
+            inventoryProductService.subtractVariantStock(expense.getInventoryProductVariant(), expense.getQuantity());
+            expense.setInventoryProduct(null);
+            expense.setInventoryProductVariant(null);
+            return;
+        }
+
+        if (expense.getInventoryProduct() != null) {
+            inventoryProductService.subtractStock(expense.getInventoryProduct(), expense.getQuantity());
+            expense.setInventoryProduct(null);
+        }
     }
 
     private InventoryProductEntity requireActiveInventoryProductByConcept(String concept) {
@@ -225,11 +297,67 @@ public class ExpenseServiceImpl implements ExpenseService {
         }
     }
 
+    private boolean reattachAutomaticInventoryReference(
+            ExpenseEntity expense,
+            InventoryProductEntity previousInventoryProduct,
+            InventoryProductVariantEntity previousInventoryProductVariant
+    ) {
+        if (isStockMovementApplied(expense)) {
+            return false;
+        }
+
+        if (previousInventoryProductVariant != null) {
+            expense.setConcept(buildVariantConcept(previousInventoryProductVariant));
+            expense.setInventoryProduct(previousInventoryProductVariant.getProduct());
+            expense.setInventoryProductVariant(previousInventoryProductVariant);
+            return true;
+        }
+
+        if (previousInventoryProduct != null) {
+            expense.setConcept(previousInventoryProduct.getName());
+            expense.setInventoryProduct(previousInventoryProduct);
+            expense.setInventoryProductVariant(null);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void validateNoInventoryReferencesForNonSupplies(Long inventoryProductId, Long inventoryProductVariantId) {
+        if (inventoryProductId != null || inventoryProductVariantId != null) {
+            throw new BadRequestException(
+                    "inventoryProductId e inventoryProductVariantId solo se pueden informar en gastos SUPPLIES"
+            );
+        }
+    }
+
+    private void validateVariantProductMatch(InventoryProductEntity product, Long inventoryProductId) {
+        if (inventoryProductId != null && !product.getId().equals(inventoryProductId)) {
+            throw new BadRequestException(
+                    "inventoryProductId no coincide con el producto base de inventoryProductVariantId"
+            );
+        }
+    }
+
+    private void validateSimpleInventoryProduct(InventoryProductEntity inventoryProduct) {
+        if (Boolean.TRUE.equals(inventoryProduct.getHasVariants())) {
+            throw new BadRequestException(
+                    "inventoryProductVariantId es obligatorio para gastos SUPPLIES de productos con variantes"
+            );
+        }
+    }
+
+    private String buildVariantConcept(InventoryProductVariantEntity variant) {
+        return variant.getProduct().getName() + " - " + variant.getVariantLabel();
+    }
+
     private boolean isStockMovementApplied(ExpenseEntity expense) {
         return !Boolean.FALSE.equals(expense.getStockMovementApplied());
     }
 
     private ExpenseResponse mapToResponse(ExpenseEntity expense) {
+        InventoryProductVariantEntity variant = expense.getInventoryProductVariant();
+
         return ExpenseResponse.builder()
                 .id(expense.getId())
                 .expenseDate(expense.getExpenseDate())
@@ -239,9 +367,25 @@ public class ExpenseServiceImpl implements ExpenseService {
                 .quantity(expense.getQuantity())
                 .amount(expense.getAmount())
                 .notes(expense.getNotes())
+                .inventoryProductId(resolveInventoryProductId(expense))
+                .inventoryProductVariantId(variant != null ? variant.getId() : null)
+                .inventoryProductVariantLabel(variant != null ? variant.getVariantLabel() : null)
+                .inventoryProductVariantSku(variant != null ? variant.getSku() : null)
                 .createdAt(expense.getCreatedAt())
                 .updatedAt(expense.getUpdatedAt())
                 .build();
+    }
+
+    private Long resolveInventoryProductId(ExpenseEntity expense) {
+        if (expense.getInventoryProduct() != null) {
+            return expense.getInventoryProduct().getId();
+        }
+
+        if (expense.getInventoryProductVariant() != null) {
+            return expense.getInventoryProductVariant().getProduct().getId();
+        }
+
+        return null;
     }
 
     private String getCategoryLabel(ExpenseCategory category) {

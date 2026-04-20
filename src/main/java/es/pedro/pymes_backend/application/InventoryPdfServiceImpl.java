@@ -5,6 +5,7 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import es.pedro.pymes_backend.domain.InventoryProductEntity;
+import es.pedro.pymes_backend.domain.InventoryProductVariantEntity;
 import es.pedro.pymes_backend.domain.InventoryStockStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -71,7 +72,7 @@ public class InventoryPdfServiceImpl implements InventoryPdfService {
                 .count();
 
         int totalUnits = products.stream()
-                .mapToInt(InventoryProductEntity::getStock)
+                .mapToInt(this::getStock)
                 .sum();
 
         PdfPTable table = new PdfPTable(2);
@@ -121,7 +122,7 @@ public class InventoryPdfServiceImpl implements InventoryPdfService {
                 table.addCell(buildCell(product.getName(), false));
                 table.addCell(buildCell(product.getCategory().getName(), false));
                 table.addCell(buildCell(product.getSku() != null ? product.getSku() : "-", false));
-                table.addCell(buildCell(String.valueOf(product.getStock()), false));
+                table.addCell(buildCell(String.valueOf(getStock(product)), false));
                 table.addCell(buildCell(getStatusLabel(getStatus(product)), false));
             }
         }
@@ -140,6 +141,22 @@ public class InventoryPdfServiceImpl implements InventoryPdfService {
     }
 
     private InventoryStockStatus getStatus(InventoryProductEntity product) {
+        if (Boolean.TRUE.equals(product.getHasVariants())) {
+            List<InventoryProductVariantEntity> activeVariants = getActiveVariants(product);
+            int totalStock = activeVariants.stream()
+                    .mapToInt(InventoryProductVariantEntity::getStock)
+                    .sum();
+
+            if (totalStock == 0) {
+                return InventoryStockStatus.OUT_OF_STOCK;
+            }
+
+            boolean hasLowOrOutVariant = activeVariants.stream()
+                    .anyMatch(variant -> variant.getStock() <= variant.getMinimumStock());
+
+            return hasLowOrOutVariant ? InventoryStockStatus.LOW_STOCK : InventoryStockStatus.IN_STOCK;
+        }
+
         if (product.getStock() == 0) {
             return InventoryStockStatus.OUT_OF_STOCK;
         }
@@ -147,6 +164,26 @@ public class InventoryPdfServiceImpl implements InventoryPdfService {
             return InventoryStockStatus.LOW_STOCK;
         }
         return InventoryStockStatus.IN_STOCK;
+    }
+
+    private int getStock(InventoryProductEntity product) {
+        if (!Boolean.TRUE.equals(product.getHasVariants())) {
+            return product.getStock();
+        }
+
+        return getActiveVariants(product).stream()
+                .mapToInt(InventoryProductVariantEntity::getStock)
+                .sum();
+    }
+
+    private List<InventoryProductVariantEntity> getActiveVariants(InventoryProductEntity product) {
+        if (product.getVariants() == null) {
+            return List.of();
+        }
+
+        return product.getVariants().stream()
+                .filter(variant -> Boolean.TRUE.equals(variant.getActive()))
+                .toList();
     }
 
     private String getStatusLabel(InventoryStockStatus status) {

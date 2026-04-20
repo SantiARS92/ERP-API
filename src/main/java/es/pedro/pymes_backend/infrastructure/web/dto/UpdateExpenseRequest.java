@@ -36,4 +36,8 @@ public class UpdateExpenseRequest {
 
     @Size(max = 1000, message = "Las notas no pueden superar los 1000 caracteres")
     private String notes;
+
+    private Long inventoryProductId;
+
+    private Long inventoryProductVariantId;
 }

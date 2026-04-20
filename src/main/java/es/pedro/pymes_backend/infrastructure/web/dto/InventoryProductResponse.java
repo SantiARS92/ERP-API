@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -25,6 +26,10 @@ public class InventoryProductResponse {
 
     private String sku;
     private BigDecimal purchasePrice;
+
+    private Boolean hasVariants;
+    private Integer variantCount;
+    private List<InventoryProductVariantResponse> variants;
 
     private Boolean active;
 

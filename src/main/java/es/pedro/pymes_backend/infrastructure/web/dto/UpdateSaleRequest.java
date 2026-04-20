@@ -28,6 +28,8 @@ public class UpdateSaleRequest {
 
     private Long inventoryProductId;
 
+    private Long inventoryProductVariantId;
+
     @Size(max = 255, message = "El nombre del producto no puede superar 255 caracteres")
     private String itemName;
 

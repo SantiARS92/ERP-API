@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "inventory_products")
@@ -41,6 +43,13 @@ public class InventoryProductEntity {
     @Column(name = "purchase_price", precision = 12, scale = 2)
     private BigDecimal purchasePrice;
 
+    @Column(name = "has_variants", nullable = false)
+    private Boolean hasVariants;
+
+    @OneToMany(mappedBy = "product")
+    @Builder.Default
+    private List<InventoryProductVariantEntity> variants = new ArrayList<>();
+
     @Column(nullable = false)
     private Boolean active;
 
@@ -57,6 +66,9 @@ public class InventoryProductEntity {
         this.updatedAt = now;
         if (this.active == null) {
             this.active = true;
+        }
+        if (this.hasVariants == null) {
+            this.hasVariants = false;
         }
     }
 
