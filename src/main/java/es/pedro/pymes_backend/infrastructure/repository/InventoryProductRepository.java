@@ -21,6 +21,7 @@ public interface InventoryProductRepository extends JpaRepository<InventoryProdu
             select p.name
             from InventoryProductEntity p
             where p.active = true
+              and (p.hasVariants = false or p.hasVariants is null)
               and lower(p.name) like lower(concat('%', :query, '%'))
             order by p.name asc
             """)

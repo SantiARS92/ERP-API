@@ -110,6 +110,21 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
     }
 
     @Test
+    void targetReadEndpointsRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/inventory/products"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/inventory/products/{id}", 1))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/professionals"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/professionals/{id}", 1))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void guestCannotWriteAppointments() throws Exception {
         String guestToken = issueGuestToken();
 
@@ -161,6 +176,88 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/professionals/{id}", 1)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void expenseEndpointsRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/expenses")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/expenses/{id}", 1))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/expenses/recent")
+                        .param("limit", "5"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/expenses/suggestions")
+                        .param("query", "auth")
+                        .param("category", "OTHER"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(expenseJson("Gasto sin token")))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(put("/api/expenses/{id}", 1)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(expenseJson("Gasto sin token editado")))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/expenses/{id}", 1))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/expenses/export/pdf"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void guestCannotAccessAnyExpenseEndpointWithJwt() throws Exception {
+        String guestToken = issueGuestToken();
+
+        mockMvc.perform(get("/api/expenses")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/expenses/{id}", 1)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/expenses/recent")
+                        .param("limit", "5")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/expenses/suggestions")
+                        .param("query", "auth")
+                        .param("category", "OTHER")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(expenseJson("Gasto guest"))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/expenses/{id}", 1)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(expenseJson("Gasto guest editado"))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/expenses/{id}", 1)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/expenses/export/pdf")
                         .header(HttpHeaders.AUTHORIZATION, bearer(guestToken)))
                 .andExpect(status().isForbidden());
     }
@@ -494,6 +591,19 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
     }
 
     @Test
+    void adminCanAccessAllExpenseEndpointsWithJwt() throws Exception {
+        assertCanAccessAllExpenseEndpoints(issueAdminToken(), "Gasto Admin Auth");
+    }
+
+    @Test
+    void professionalCanAccessAllExpenseEndpointsWithJwt() throws Exception {
+        assertCanAccessAllExpenseEndpoints(
+                issueProfessionalToken("Profesional Gastos", "clave-gastos"),
+                "Gasto Professional Auth"
+        );
+    }
+
+    @Test
     void professionalCanReadCategoriesButCannotWriteThem() throws Exception {
         String professionalToken = issueProfessionalToken("Profesional Categorias", "clave-categorias");
         CategoryEntity category = saveCategory("Categoria Solo Lectura");
@@ -565,6 +675,37 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
                                 """.formatted(unique("Categoria Admin")))
                         .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void adminCanReadTargetInventoryAndProfessionalEndpointsWithJwt() throws Exception {
+        String adminToken = issueAdminToken();
+        ProfessionalEntity professional = saveProfessional("Profesional Lectura Admin", "clave-admin-lectura", true);
+        CategoryEntity category = saveCategory("Categoria Lectura Admin");
+        InventoryProductEntity product = saveProduct("Producto Lectura Admin", 8, category);
+
+        mockMvc.perform(get("/api/inventory/products")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+
+        mockMvc.perform(get("/api/inventory/products/{id}", product.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(product.getId().intValue()));
+
+        mockMvc.perform(get("/api/professionals")
+                        .param("active", "true")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(get("/api/professionals/{id}", professional.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(professional.getId().intValue()));
     }
 
     @Test
@@ -650,6 +791,75 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
             throw new IllegalStateException("No se pudo extraer el id: " + result.getResponse().getContentAsString());
         }
         return Long.parseLong(matcher.group(1));
+    }
+
+    private void assertCanAccessAllExpenseEndpoints(String token, String conceptPrefix) throws Exception {
+        String concept = unique(conceptPrefix);
+        Long expenseId = extractId(
+                mockMvc.perform(post("/api/expenses")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(expenseJson(concept))
+                                .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.concept").value(concept))
+                        .andReturn()
+        );
+
+        mockMvc.perform(get("/api/expenses")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+
+        mockMvc.perform(get("/api/expenses/{id}", expenseId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(expenseId.intValue()));
+
+        mockMvc.perform(get("/api/expenses/recent")
+                        .param("limit", "5")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(get("/api/expenses/suggestions")
+                        .param("query", conceptPrefix)
+                        .param("category", "OTHER")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mockMvc.perform(get("/api/expenses/export/pdf")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF));
+
+        String updatedConcept = concept + " editado";
+        mockMvc.perform(put("/api/expenses/{id}", expenseId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(expenseJson(updatedConcept))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(expenseId.intValue()))
+                .andExpect(jsonPath("$.concept").value(updatedConcept));
+
+        mockMvc.perform(delete("/api/expenses/{id}", expenseId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isNoContent());
+    }
+
+    private String expenseJson(String concept) {
+        return """
+                {
+                  "expenseDate": "%s",
+                  "concept": "%s",
+                  "category": "OTHER",
+                  "quantity": 1,
+                  "amount": 35.00,
+                  "notes": "Gasto autorizacion"
+                }
+                """.formatted(BASE_DATE, concept);
     }
 
     private String bearer(String token) {

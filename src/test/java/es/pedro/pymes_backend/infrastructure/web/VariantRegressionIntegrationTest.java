@@ -247,6 +247,58 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
     }
 
     @Test
+    void inventoryProductApiShouldExposeBaseProductsAndActiveVariantDetailForFrontendSelectors() throws Exception {
+        CategoryEntity category = saveCategory("Frontend inventory");
+        InventoryProductEntity simpleProduct = saveSimpleProduct("Frontend Simple Product", category, 9);
+        VariantProduct variantProduct = saveVariantProduct(
+                "Frontend Variant Product",
+                category,
+                "Roja / M",
+                4,
+                "Azul / L",
+                6
+        );
+
+        variantProduct.secondVariant().setActive(false);
+        inventoryProductVariantRepository.saveAndFlush(variantProduct.secondVariant());
+
+        mockMvc.perform(get("/api/inventory/products")
+                        .param("search", variantProduct.product().getName())
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(variantProduct.product().getId().intValue()))
+                .andExpect(jsonPath("$.content[0].hasVariants").value(true))
+                .andExpect(jsonPath("$.content[0].variantCount").value(1))
+                .andExpect(jsonPath("$.content[0].stock").value(4))
+                .andExpect(jsonPath("$.content[0].variants", hasSize(0)));
+
+        mockMvc.perform(get("/api/inventory/products/{id}", variantProduct.product().getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(variantProduct.product().getId().intValue()))
+                .andExpect(jsonPath("$.hasVariants").value(true))
+                .andExpect(jsonPath("$.variantCount").value(1))
+                .andExpect(jsonPath("$.stock").value(4))
+                .andExpect(jsonPath("$.variants", hasSize(1)))
+                .andExpect(jsonPath("$.variants[0].id").value(variantProduct.firstVariant().getId().intValue()))
+                .andExpect(jsonPath("$.variants[0].variantLabel").value("Roja / M"))
+                .andExpect(jsonPath("$.variants[0].stock").value(4))
+                .andExpect(jsonPath("$.variants[0].active").value(true));
+
+        mockMvc.perform(get("/api/inventory/products")
+                        .param("search", simpleProduct.getName())
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(simpleProduct.getId().intValue()))
+                .andExpect(jsonPath("$.content[0].hasVariants").value(false))
+                .andExpect(jsonPath("$.content[0].stock").value(9))
+                .andExpect(jsonPath("$.content[0].variants", hasSize(0)));
+    }
+
+    @Test
     void expensesCompatibilityShouldHandleSimpleVariantAndRejectNonSuppliesInventoryReferences() throws Exception {
         CategoryEntity category = saveCategory("Expenses compatibility");
         InventoryProductEntity simpleProduct = saveSimpleProduct("Expense Simple Product", category, 10);

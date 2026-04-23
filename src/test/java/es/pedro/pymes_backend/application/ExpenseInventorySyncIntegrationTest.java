@@ -179,6 +179,7 @@ class ExpenseInventorySyncIntegrationTest {
     void getSuppliesSuggestionsShouldUseActiveInventoryProductNames() {
         saveActiveProduct("Champu Kerastase", 10);
         saveActiveProduct("Champu L'Oreal Prof", 15);
+        saveActiveVariant("Champu con variantes", "Roja / M", 7);
         expenseService.createExpense(buildCreateRequest("Proveedor habitual", ExpenseCategory.OTHER, 1));
 
         List<String> suggestions = expenseService.getConceptSuggestions("champu", ExpenseCategory.SUPPLIES, 5);
