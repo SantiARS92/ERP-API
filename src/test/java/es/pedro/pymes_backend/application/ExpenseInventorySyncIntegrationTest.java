@@ -198,6 +198,49 @@ class ExpenseInventorySyncIntegrationTest {
     }
 
     @Test
+    void getExpenseByIdShouldTolerateLegacyExpenseWithNullCategory() {
+        ExpenseEntity expense = expenseRepository.saveAndFlush(
+                ExpenseEntity.builder()
+                        .expenseDate(EXPENSE_DATE)
+                        .concept("Gasto legado sin categoria")
+                        .category(ExpenseCategory.OTHER)
+                        .quantity(1)
+                        .amount(new BigDecimal("25.00"))
+                        .stockMovementApplied(true)
+                        .build()
+        );
+        expense.setCategory(null);
+
+        ExpenseResponse response = expenseService.getExpenseById(expense.getId());
+
+        assertThat(response.getCategory()).isNull();
+        assertThat(response.getCategoryLabel()).isEqualTo("Sin categoria");
+    }
+
+    @Test
+    void getExpenseByIdShouldTolerateLegacyVariantReferenceWithoutProduct() {
+        InventoryProductVariantEntity variant = saveActiveVariant("Producto legado", "Roja / M", 4);
+        ExpenseEntity expense = expenseRepository.saveAndFlush(
+                ExpenseEntity.builder()
+                        .expenseDate(EXPENSE_DATE)
+                        .concept("Producto legado - Roja / M")
+                        .category(ExpenseCategory.SUPPLIES)
+                        .quantity(1)
+                        .amount(new BigDecimal("12.00"))
+                        .inventoryProductVariant(variant)
+                        .stockMovementApplied(false)
+                        .build()
+        );
+        variant.setProduct(null);
+
+        ExpenseResponse response = expenseService.getExpenseById(expense.getId());
+
+        assertThat(response.getInventoryProductId()).isNull();
+        assertThat(response.getInventoryProductVariantId()).isEqualTo(variant.getId());
+        assertThat(response.getInventoryProductVariantLabel()).isEqualTo("Roja / M");
+    }
+
+    @Test
     void updateSyncedExpenseShouldAdjustStockWithoutDuplicating() {
         InventoryProductEntity product = saveActiveProduct(MATCHING_PRODUCT_NAME, 15);
         ExpenseResponse createdExpense = expenseService.createExpense(

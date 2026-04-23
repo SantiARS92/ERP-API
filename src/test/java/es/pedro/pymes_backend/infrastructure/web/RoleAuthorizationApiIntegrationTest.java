@@ -604,6 +604,17 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
     }
 
     @Test
+    void authenticatedExpenseRequestValidationErrorsShouldNotBecomeUnauthorized() throws Exception {
+        String adminToken = issueAdminToken();
+
+        mockMvc.perform(get("/api/expenses")
+                        .param("page", "-1")
+                        .param("size", "10")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void professionalCanReadCategoriesButCannotWriteThem() throws Exception {
         String professionalToken = issueProfessionalToken("Profesional Categorias", "clave-categorias");
         CategoryEntity category = saveCategory("Categoria Solo Lectura");

@@ -1,5 +1,6 @@
 package es.pedro.pymes_backend.infrastructure.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,23 +47,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        CustomUserPrincipal principal;
         try {
-            CustomUserPrincipal principal = jwtService.extractPrincipal(token);
-
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            filterChain.doFilter(request, response);
-        } catch (Exception ex) {
+            principal = jwtService.extractPrincipal(token);
+        } catch (JwtException | IllegalArgumentException ex) {
             SecurityContextHolder.clearContext();
             authenticationEntryPoint.commence(
                     request,
                     response,
                     new BadCredentialsException("Token invalido o expirado", ex)
             );
+            return;
         }
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        filterChain.doFilter(request, response);
     }
 
     @Override

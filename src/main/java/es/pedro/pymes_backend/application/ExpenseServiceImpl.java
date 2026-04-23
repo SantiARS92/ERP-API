@@ -377,18 +377,27 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     private Long resolveInventoryProductId(ExpenseEntity expense) {
+        if (expense == null) {
+            return null;
+        }
+
         if (expense.getInventoryProduct() != null) {
             return expense.getInventoryProduct().getId();
         }
 
-        if (expense.getInventoryProductVariant() != null) {
-            return expense.getInventoryProductVariant().getProduct().getId();
+        InventoryProductVariantEntity variant = expense.getInventoryProductVariant();
+        if (variant != null && variant.getProduct() != null) {
+            return variant.getProduct().getId();
         }
 
         return null;
     }
 
     private String getCategoryLabel(ExpenseCategory category) {
+        if (category == null) {
+            return "Sin categoria";
+        }
+
         return switch (category) {
             case SUPPLIES -> "Suministros";
             case SERVICES -> "Servicios";
