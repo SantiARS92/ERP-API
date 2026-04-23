@@ -257,11 +257,17 @@ class DevDataSeederIntegrationTest {
                 && expense.getInventoryProduct() != null
                 && expense.getInventoryProductVariant() == null
                 && expense.getConcept().equals("Champu L'Oreal Prof")
+                && expense.getExpenseDate().equals(LocalDate.of(2026, 3, 4))
+                && expense.getQuantity() == 4
+                && expense.getAmount().compareTo(new BigDecimal("31.60")) == 0
                 && Boolean.TRUE.equals(expense.getStockMovementApplied()));
         assertThat(expenses).anyMatch(expense -> expense.getCategory() == ExpenseCategory.SUPPLIES
                 && expense.getInventoryProduct() != null
                 && expense.getInventoryProductVariant() != null
                 && expense.getConcept().equals("Camiseta Basica - Roja / M")
+                && expense.getExpenseDate().equals(LocalDate.of(2026, 3, 18))
+                && expense.getQuantity() == 6
+                && expense.getAmount().compareTo(new BigDecimal("40.80")) == 0
                 && Boolean.TRUE.equals(expense.getStockMovementApplied()));
         assertThat(expenses).anyMatch(expense -> expense.getCategory() == ExpenseCategory.SUPPLIES
                 && expense.getInventoryProduct() != null
