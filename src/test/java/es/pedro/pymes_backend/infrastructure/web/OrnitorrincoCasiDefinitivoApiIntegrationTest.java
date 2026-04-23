@@ -116,7 +116,7 @@ class OrnitorrincoCasiDefinitivoApiIntegrationTest extends AuthenticatedApiInteg
                 "Aceite Ornitorrinco",
                 "SUPPLIES",
                 5,
-                "40.00",
+                "8.00",
                 "Reposicion base"
         );
 
@@ -167,10 +167,9 @@ class OrnitorrincoCasiDefinitivoApiIntegrationTest extends AuthenticatedApiInteg
                                           "unitPrice": 15.00,
                                           "quantity": 2,
                                           "saleDate": "%s",
-                                          "saleTime": "%s",
                                           "notes": "Venta sin cita"
                                         }
-                                        """.formatted(productId, BASE_DATE, BASE_TIME.plusHours(2))))
+                                        """.formatted(productId, BASE_DATE)))
                         .andExpect(status().isCreated())
                         .andExpect(jsonPath("$.clientId").value(walkInClientId.intValue()))
                         .andExpect(jsonPath("$.clientName").value("Al contado"))
@@ -424,7 +423,7 @@ class OrnitorrincoCasiDefinitivoApiIntegrationTest extends AuthenticatedApiInteg
                 "Bruma Reversible",
                 "SUPPLIES",
                 4,
-                "24.00",
+                "6.00",
                 "Suma stock"
         );
         assertThat(getStock(product.getId())).isEqualTo(14);
@@ -463,10 +462,9 @@ class OrnitorrincoCasiDefinitivoApiIntegrationTest extends AuthenticatedApiInteg
                                           "unitPrice": 9.50,
                                           "quantity": 3,
                                           "saleDate": "%s",
-                                          "saleTime": "%s",
                                           "notes": "Resta stock"
                                         }
-                                        """.formatted(clientId, product.getId(), BASE_DATE, BASE_TIME)))
+                                        """.formatted(clientId, product.getId(), BASE_DATE)))
                         .andExpect(status().isCreated())
                         .andReturn()
         );
@@ -483,10 +481,9 @@ class OrnitorrincoCasiDefinitivoApiIntegrationTest extends AuthenticatedApiInteg
                                   "unitPrice": 9.50,
                                   "quantity": 1,
                                   "saleDate": "%s",
-                                  "saleTime": "%s",
                                   "notes": "Ahora resta menos"
                                 }
-                                """.formatted(clientId, product.getId(), BASE_DATE, BASE_TIME.plusHours(1))))
+                                """.formatted(clientId, product.getId(), BASE_DATE)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.quantity").value(1));
 
@@ -591,10 +588,9 @@ class OrnitorrincoCasiDefinitivoApiIntegrationTest extends AuthenticatedApiInteg
                                   "itemType": "SERVICE",
                                   "serviceId": %d,
                                   "quantity": 1,
-                                  "saleDate": "%s",
-                                  "saleTime": "%s"
+                                  "saleDate": "%s"
                                 }
-                                """.formatted(serviceId, BASE_DATE, BASE_TIME)))
+                                """.formatted(serviceId, BASE_DATE)))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(post("/api/appointments")

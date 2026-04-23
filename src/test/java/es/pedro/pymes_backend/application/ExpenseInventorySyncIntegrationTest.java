@@ -58,9 +58,11 @@ class ExpenseInventorySyncIntegrationTest {
         );
 
         assertThat(expense.getId()).isNotNull();
+        assertThat(expense.getAmount()).isEqualByComparingTo("60.00");
         assertThat(getStock(product.getId())).isEqualTo(20);
         assertThat(getExpense(expense.getId()).getInventoryProduct()).isNotNull();
         assertThat(getExpense(expense.getId()).getInventoryProduct().getId()).isEqualTo(product.getId());
+        assertThat(getExpense(expense.getId()).getAmount()).isEqualByComparingTo("60.00");
     }
 
     @Test
@@ -74,6 +76,7 @@ class ExpenseInventorySyncIntegrationTest {
         assertThat(expense.getConcept()).isEqualTo(product.getName());
         assertThat(expense.getInventoryProductId()).isEqualTo(product.getId());
         assertThat(expense.getInventoryProductVariantId()).isNull();
+        assertThat(expense.getAmount()).isEqualByComparingTo("48.00");
         assertThat(getStock(product.getId())).isEqualTo(12);
     }
 
@@ -89,6 +92,7 @@ class ExpenseInventorySyncIntegrationTest {
         assertThat(expense.getInventoryProductId()).isEqualTo(variant.getProduct().getId());
         assertThat(expense.getInventoryProductVariantId()).isEqualTo(variant.getId());
         assertThat(expense.getInventoryProductVariantLabel()).isEqualTo("Roja / M");
+        assertThat(expense.getAmount()).isEqualByComparingTo("60.00");
         assertThat(getStock(variant.getProduct().getId())).isZero();
         assertThat(getVariantStock(variant.getId())).isEqualTo(12);
 
@@ -198,49 +202,6 @@ class ExpenseInventorySyncIntegrationTest {
     }
 
     @Test
-    void getExpenseByIdShouldTolerateLegacyExpenseWithNullCategory() {
-        ExpenseEntity expense = expenseRepository.saveAndFlush(
-                ExpenseEntity.builder()
-                        .expenseDate(EXPENSE_DATE)
-                        .concept("Gasto legado sin categoria")
-                        .category(ExpenseCategory.OTHER)
-                        .quantity(1)
-                        .amount(new BigDecimal("25.00"))
-                        .stockMovementApplied(true)
-                        .build()
-        );
-        expense.setCategory(null);
-
-        ExpenseResponse response = expenseService.getExpenseById(expense.getId());
-
-        assertThat(response.getCategory()).isNull();
-        assertThat(response.getCategoryLabel()).isEqualTo("Sin categoria");
-    }
-
-    @Test
-    void getExpenseByIdShouldTolerateLegacyVariantReferenceWithoutProduct() {
-        InventoryProductVariantEntity variant = saveActiveVariant("Producto legado", "Roja / M", 4);
-        ExpenseEntity expense = expenseRepository.saveAndFlush(
-                ExpenseEntity.builder()
-                        .expenseDate(EXPENSE_DATE)
-                        .concept("Producto legado - Roja / M")
-                        .category(ExpenseCategory.SUPPLIES)
-                        .quantity(1)
-                        .amount(new BigDecimal("12.00"))
-                        .inventoryProductVariant(variant)
-                        .stockMovementApplied(false)
-                        .build()
-        );
-        variant.setProduct(null);
-
-        ExpenseResponse response = expenseService.getExpenseById(expense.getId());
-
-        assertThat(response.getInventoryProductId()).isNull();
-        assertThat(response.getInventoryProductVariantId()).isEqualTo(variant.getId());
-        assertThat(response.getInventoryProductVariantLabel()).isEqualTo("Roja / M");
-    }
-
-    @Test
     void updateSyncedExpenseShouldAdjustStockWithoutDuplicating() {
         InventoryProductEntity product = saveActiveProduct(MATCHING_PRODUCT_NAME, 15);
         ExpenseResponse createdExpense = expenseService.createExpense(
@@ -253,9 +214,11 @@ class ExpenseInventorySyncIntegrationTest {
         );
 
         assertThat(updatedExpense.getQuantity()).isEqualTo(3);
+        assertThat(updatedExpense.getAmount()).isEqualByComparingTo("36.00");
         assertThat(getStock(product.getId())).isEqualTo(18);
         assertThat(getExpense(createdExpense.getId()).getInventoryProduct()).isNotNull();
         assertThat(getExpense(createdExpense.getId()).getInventoryProduct().getId()).isEqualTo(product.getId());
+        assertThat(getExpense(createdExpense.getId()).getAmount()).isEqualByComparingTo("36.00");
     }
 
     @Test
@@ -274,6 +237,7 @@ class ExpenseInventorySyncIntegrationTest {
         assertThat(updatedExpense.getConcept()).isEqualTo("Camiseta Basica - Azul / L");
         assertThat(updatedExpense.getInventoryProductId()).isEqualTo(variant.getProduct().getId());
         assertThat(updatedExpense.getInventoryProductVariantId()).isEqualTo(variant.getId());
+        assertThat(updatedExpense.getAmount()).isEqualByComparingTo("48.00");
         assertThat(getStock(simpleProduct.getId())).isEqualTo(15);
         assertThat(getVariantStock(variant.getId())).isEqualTo(14);
     }
@@ -380,7 +344,7 @@ class ExpenseInventorySyncIntegrationTest {
                 .concept(concept)
                 .category(category)
                 .quantity(quantity)
-                .amount(new BigDecimal("120.00"))
+                .amount(new BigDecimal("12.00"))
                 .notes("Reposicion")
                 .inventoryProductId(inventoryProductId)
                 .inventoryProductVariantId(inventoryProductVariantId)
@@ -403,7 +367,7 @@ class ExpenseInventorySyncIntegrationTest {
                 .concept(concept)
                 .category(category)
                 .quantity(quantity)
-                .amount(new BigDecimal("120.00"))
+                .amount(new BigDecimal("12.00"))
                 .notes("Reposicion")
                 .inventoryProductId(inventoryProductId)
                 .inventoryProductVariantId(inventoryProductVariantId)

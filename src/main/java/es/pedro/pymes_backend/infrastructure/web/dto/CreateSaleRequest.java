@@ -10,7 +10,6 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalTime;
 
 @Getter
 @Setter
@@ -44,9 +43,6 @@ public class CreateSaleRequest {
 
     @NotNull(message = "La fecha de la venta es obligatoria")
     private LocalDate saleDate;
-
-    @NotNull(message = "La hora de la venta es obligatoria")
-    private LocalTime saleTime;
 
     @Size(max = 1000, message = "Las notas no pueden superar 1000 caracteres")
     private String notes;

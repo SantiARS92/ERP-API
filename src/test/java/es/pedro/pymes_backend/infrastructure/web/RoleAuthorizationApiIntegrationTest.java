@@ -418,10 +418,9 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
                                           "unitPrice": 12.50,
                                           "quantity": 2,
                                           "saleDate": "%s",
-                                          "saleTime": "%s",
                                           "notes": "Venta profesional"
                                         }
-                                        """.formatted(clientId, product.getId(), BASE_DATE, BASE_TIME))
+                                        """.formatted(clientId, product.getId(), BASE_DATE))
                                 .header(HttpHeaders.AUTHORIZATION, bearer(professionalToken)))
                         .andExpect(status().isCreated())
                         .andReturn()
@@ -444,10 +443,9 @@ class RoleAuthorizationApiIntegrationTest extends AuthenticatedApiIntegrationTes
                                   "unitPrice": 12.50,
                                   "quantity": 3,
                                   "saleDate": "%s",
-                                  "saleTime": "%s",
                                   "notes": "Venta profesional editada"
                                 }
-                                """.formatted(clientId, product.getId(), BASE_DATE, BASE_TIME.plusHours(1)))
+                                """.formatted(clientId, product.getId(), BASE_DATE))
                         .header(HttpHeaders.AUTHORIZATION, bearer(professionalToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(saleId.intValue()));

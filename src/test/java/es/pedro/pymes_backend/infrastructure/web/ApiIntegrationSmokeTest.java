@@ -474,10 +474,9 @@ class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
                                   "serviceId": %d,
                                   "quantity": 1,
                                   "saleDate": "%s",
-                                  "saleTime": "%s",
                                   "notes": "Venta servicio api"
                                 }
-                                """.formatted(client.getId(), service.getId(), BASE_DATE, BASE_TIME.minusHours(1))))
+                                """.formatted(client.getId(), service.getId(), BASE_DATE)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.serviceId").value(service.getId().intValue()))
                 .andExpect(jsonPath("$.inventoryProductId").value(nullValue()))
@@ -499,10 +498,9 @@ class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
                                           "unitPrice": 12.50,
                                           "quantity": 2,
                                           "saleDate": "%s",
-                                          "saleTime": "%s",
                                           "notes": "Venta api"
                                         }
-                                        """.formatted(client.getId(), product.getId(), BASE_DATE, BASE_TIME)))
+                                        """.formatted(client.getId(), product.getId(), BASE_DATE)))
                         .andExpect(status().isCreated())
                         .andExpect(jsonPath("$.inventoryProductId").value(product.getId().intValue()))
                         .andExpect(jsonPath("$.itemName").value(product.getName()))
@@ -520,10 +518,9 @@ class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
                                   "inventoryProductId": %d,
                                   "unitPrice": 12.50,
                                   "quantity": 50,
-                                  "saleDate": "%s",
-                                  "saleTime": "%s"
+                                  "saleDate": "%s"
                                 }
-                                """.formatted(client.getId(), product.getId(), BASE_DATE, BASE_TIME.plusHours(1))))
+                                """.formatted(client.getId(), product.getId(), BASE_DATE)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
 
@@ -538,10 +535,9 @@ class ApiIntegrationSmokeTest extends AuthenticatedApiIntegrationTestSupport {
                                   "inventoryProductId": %d,
                                   "unitPrice": 12.50,
                                   "quantity": 4,
-                                  "saleDate": "%s",
-                                  "saleTime": "%s"
+                                  "saleDate": "%s"
                                 }
-                                """.formatted(client.getId(), product.getId(), BASE_DATE, BASE_TIME.plusHours(2))))
+                                """.formatted(client.getId(), product.getId(), BASE_DATE)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.quantity").value(4));
 

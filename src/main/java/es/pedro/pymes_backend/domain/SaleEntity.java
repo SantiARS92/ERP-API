@@ -8,13 +8,12 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 @Entity
 @Table(
         name = "sales",
         indexes = {
-                @Index(name = "idx_sales_date_time_id", columnList = "sale_date, sale_time, id"),
+                @Index(name = "idx_sales_date_id", columnList = "sale_date, id"),
                 @Index(name = "idx_sales_item_source_date", columnList = "item_type, source_type, sale_date"),
                 @Index(name = "idx_sales_service_date", columnList = "service_id, sale_date"),
                 @Index(name = "idx_sales_inventory_date", columnList = "inventory_product_id, sale_date"),
@@ -80,9 +79,6 @@ public class SaleEntity {
 
     @Column(nullable = false)
     private LocalDate saleDate;
-
-    @Column(nullable = false)
-    private LocalTime saleTime;
 
     @Column(columnDefinition = "TEXT")
     private String notes;

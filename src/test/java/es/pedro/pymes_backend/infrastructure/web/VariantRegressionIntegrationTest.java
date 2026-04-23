@@ -111,15 +111,15 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                         .param("month", String.valueOf(REPORT_MONTH.getMonthValue())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalIncome").value(65.0))
-                .andExpect(jsonPath("$.totalExpenses").value(20.0));
+                .andExpect(jsonPath("$.totalExpenses").value(64.0));
 
         mockMvc.perform(get("/api/reports/monthly/detailed")
                         .param("year", String.valueOf(REPORT_MONTH.getYear()))
                         .param("month", String.valueOf(REPORT_MONTH.getMonthValue())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.grossIncome").value(65.0))
-                .andExpect(jsonPath("$.grossExpenses").value(20.0))
-                .andExpect(jsonPath("$.operatingProfit").value(45.0))
+                .andExpect(jsonPath("$.grossExpenses").value(64.0))
+                .andExpect(jsonPath("$.operatingProfit").value(1.0))
                 .andExpect(jsonPath("$.estimatedVatPayable").exists())
                 .andExpect(jsonPath("$.estimatedIrpfPayable").exists())
                 .andExpect(jsonPath("$.estimatedTotalTaxes").exists())
@@ -147,16 +147,14 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                 variantProduct.firstVariant(),
                 2,
                 new BigDecimal("10.00"),
-                LocalDate.of(2026, 7, 10),
-                LocalTime.of(10, 0)
+                LocalDate.of(2026, 7, 10)
         );
         createVariantProductSale(
                 client,
                 variantProduct.secondVariant(),
                 3,
                 new BigDecimal("12.00"),
-                LocalDate.of(2026, 7, 11),
-                LocalTime.of(11, 0)
+                LocalDate.of(2026, 7, 11)
         );
 
         mockMvc.perform(get("/api/reports/ranking")
@@ -318,7 +316,8 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.concept").value(simpleProduct.getName()))
                 .andExpect(jsonPath("$.inventoryProductId").value(simpleProduct.getId()))
-                .andExpect(jsonPath("$.inventoryProductVariantId").value(nullValue()));
+                .andExpect(jsonPath("$.inventoryProductVariantId").value(nullValue()))
+                .andExpect(jsonPath("$.amount").value(27.0));
 
         mockMvc.perform(post("/api/expenses")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -327,7 +326,8 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.concept").value(variantProduct.product().getName() + " - Roja / M"))
                 .andExpect(jsonPath("$.inventoryProductId").value(variantProduct.product().getId()))
-                .andExpect(jsonPath("$.inventoryProductVariantId").value(variantProduct.firstVariant().getId()));
+                .andExpect(jsonPath("$.inventoryProductVariantId").value(variantProduct.firstVariant().getId()))
+                .andExpect(jsonPath("$.amount").value(16.0));
 
         mockMvc.perform(post("/api/expenses")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -360,7 +360,7 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                 10
         );
 
-        SaleResponse serviceSale = createServiceSale(client, service, LocalDate.of(2026, 9, 1), LocalTime.of(10, 0));
+        SaleResponse serviceSale = createServiceSale(client, service, LocalDate.of(2026, 9, 1));
         assertThat(serviceSale.getItemType()).isEqualTo(SaleItemType.SERVICE);
         assertThat(serviceSale.getInventoryProductId()).isNull();
         assertThat(serviceSale.getInventoryProductVariantId()).isNull();
@@ -385,9 +385,9 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                 .andExpect(status().isConflict());
 
         createSimpleProductSale(client, simpleProduct, 2, new BigDecimal("10.00"),
-                LocalDate.of(2026, 9, 3), LocalTime.of(11, 0));
+                LocalDate.of(2026, 9, 3));
         createVariantProductSale(client, variantProduct.firstVariant(), 3, new BigDecimal("12.00"),
-                LocalDate.of(2026, 9, 4), LocalTime.of(12, 0));
+                LocalDate.of(2026, 9, 4));
 
         assertThat(getStock(simpleProduct.getId())).isEqualTo(8);
         assertThat(getStock(variantProduct.product().getId())).isZero();
@@ -408,7 +408,7 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
         );
 
         SaleResponse sale = createVariantProductSale(client, variantProduct.firstVariant(), 2,
-                new BigDecimal("14.00"), LocalDate.of(2026, 10, 10), LocalTime.of(10, 0));
+                new BigDecimal("14.00"), LocalDate.of(2026, 10, 10));
         ExpenseResponse expense = expenseService.createExpense(
                 buildExpenseRequest("Proveedor historico", ExpenseCategory.SUPPLIES, 1,
                         new BigDecimal("5.00"), null, variantProduct.firstVariant().getId(), LocalDate.of(2026, 10, 10))
@@ -452,9 +452,9 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                 20
         );
 
-        createSimpleProductSale(client, simpleProduct, 2, new BigDecimal("10.00"), month.atDay(10), LocalTime.of(10, 0));
+        createSimpleProductSale(client, simpleProduct, 2, new BigDecimal("10.00"), month.atDay(10));
         createVariantProductSale(client, variantProduct.firstVariant(), 3, new BigDecimal("15.00"),
-                month.atDay(11), LocalTime.of(11, 0));
+                month.atDay(11));
         expenseService.createExpense(buildExpenseRequest("Proveedor simple", ExpenseCategory.SUPPLIES, 4,
                 new BigDecimal("12.00"), simpleProduct.getId(), null, month.atDay(12)));
         expenseService.createExpense(buildExpenseRequest("Proveedor variante", ExpenseCategory.SUPPLIES, 2,
@@ -463,7 +463,7 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
         return new RegressionData(simpleProduct, variantProduct);
     }
 
-    private SaleResponse createServiceSale(ClientEntity client, ServiceEntity service, LocalDate saleDate, LocalTime saleTime) {
+    private SaleResponse createServiceSale(ClientEntity client, ServiceEntity service, LocalDate saleDate) {
         return saleService.createManualSale(
                 CreateSaleRequest.builder()
                         .clientId(client.getId())
@@ -471,7 +471,6 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                         .serviceId(service.getId())
                         .quantity(1)
                         .saleDate(saleDate)
-                        .saleTime(saleTime)
                         .build()
         );
     }
@@ -481,8 +480,7 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
             InventoryProductEntity product,
             int quantity,
             BigDecimal unitPrice,
-            LocalDate saleDate,
-            LocalTime saleTime
+            LocalDate saleDate
     ) {
         return saleService.createManualSale(
                 CreateSaleRequest.builder()
@@ -492,7 +490,6 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                         .quantity(quantity)
                         .unitPrice(unitPrice)
                         .saleDate(saleDate)
-                        .saleTime(saleTime)
                         .build()
         );
     }
@@ -502,8 +499,7 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
             InventoryProductVariantEntity variant,
             int quantity,
             BigDecimal unitPrice,
-            LocalDate saleDate,
-            LocalTime saleTime
+            LocalDate saleDate
     ) {
         return saleService.createManualSale(
                 CreateSaleRequest.builder()
@@ -513,7 +509,6 @@ class VariantRegressionIntegrationTest extends AuthenticatedApiIntegrationTestSu
                         .quantity(quantity)
                         .unitPrice(unitPrice)
                         .saleDate(saleDate)
-                        .saleTime(saleTime)
                         .build()
         );
     }

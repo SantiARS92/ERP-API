@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class SaleInventoryIntegrationTest {
 
     private static final LocalDate SALE_DATE = LocalDate.of(2026, 3, 26);
-    private static final LocalTime SALE_TIME = LocalTime.of(10, 30);
+    private static final LocalTime APPOINTMENT_TIME = LocalTime.of(10, 30);
     private static final String SHAMPOO_NAME = "Champ\u00fa L'Oreal Prof";
 
     @Autowired
@@ -79,7 +79,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("12.50"))
                         .quantity(2)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .notes("Venta de producto")
                         .build()
         );
@@ -103,7 +102,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("12.50"))
                         .quantity(50)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         ))
                 .isInstanceOf(ConflictException.class)
@@ -128,7 +126,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("19.90"))
                         .quantity(3)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         );
 
@@ -161,7 +158,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("1.50"))
                         .quantity(2)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         );
 
@@ -185,7 +181,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("19.90"))
                         .quantity(1)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         ))
                 .isInstanceOf(ResponseStatusException.class)
@@ -210,7 +205,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("19.90"))
                         .quantity(1)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         ))
                 .isInstanceOf(ResponseStatusException.class)
@@ -234,7 +228,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("19.90"))
                         .quantity(5)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         ))
                 .isInstanceOf(ConflictException.class)
@@ -257,7 +250,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("25.00"))
                         .quantity(1)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .notes("Venta de servicio")
                         .build()
         );
@@ -282,7 +274,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("11.00"))
                         .quantity(2)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         );
 
@@ -295,7 +286,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("14.00"))
                         .quantity(4)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME.plusHours(1))
                         .build()
         );
 
@@ -319,7 +309,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("8.00"))
                         .quantity(2)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         );
 
@@ -333,7 +322,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("18.00"))
                         .quantity(3)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME.plusHours(1))
                         .build()
         );
 
@@ -359,7 +347,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("18.00"))
                         .quantity(3)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         );
 
@@ -372,7 +359,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("9.00"))
                         .quantity(4)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME.plusHours(1))
                         .build()
         );
 
@@ -396,7 +382,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("8.00"))
                         .quantity(4)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         );
 
@@ -420,7 +405,6 @@ class SaleInventoryIntegrationTest {
                         .unitPrice(new BigDecimal("17.00"))
                         .quantity(4)
                         .saleDate(SALE_DATE)
-                        .saleTime(SALE_TIME)
                         .build()
         );
 
@@ -444,7 +428,7 @@ class SaleInventoryIntegrationTest {
         appointment.setServiceName(service.getName());
         appointment.setPrice(service.getPrice());
         appointment.setAppointmentDate(SALE_DATE);
-        appointment.setAppointmentTime(SALE_TIME);
+        appointment.setAppointmentTime(APPOINTMENT_TIME);
         appointment.setStatus(AppointmentStatus.CONFIRMED);
         appointment.setInternalNotes("Auto sale");
 

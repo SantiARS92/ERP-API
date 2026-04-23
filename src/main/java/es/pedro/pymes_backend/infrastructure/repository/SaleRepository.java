@@ -14,7 +14,7 @@ public interface SaleRepository extends JpaRepository<SaleEntity, Long>, JpaSpec
 
     Optional<SaleEntity> findByAppointmentId(Long appointmentId);
 
-    List<SaleEntity> findBySaleDateGreaterThanEqualOrderBySaleDateDescSaleTimeDesc(
+    List<SaleEntity> findBySaleDateGreaterThanEqualOrderBySaleDateDescIdDesc(
             java.time.LocalDate date, Pageable pageable
     );
 }

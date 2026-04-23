@@ -3,6 +3,7 @@ package es.pedro.pymes_backend.application;
 import es.pedro.pymes_backend.domain.AppointmentStatus;
 import es.pedro.pymes_backend.domain.ExpenseCategory;
 import es.pedro.pymes_backend.domain.InventoryProductEntity;
+import es.pedro.pymes_backend.domain.InventoryProductVariantEntity;
 import es.pedro.pymes_backend.domain.PaymentMethod;
 import es.pedro.pymes_backend.domain.SaleItemType;
 import es.pedro.pymes_backend.infrastructure.repository.AppointmentRepository;
@@ -10,6 +11,7 @@ import es.pedro.pymes_backend.infrastructure.repository.CategoryRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ClientRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ExpenseRepository;
 import es.pedro.pymes_backend.infrastructure.repository.InventoryProductRepository;
+import es.pedro.pymes_backend.infrastructure.repository.InventoryProductVariantRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ProfessionalRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ReportQueryRepository;
 import es.pedro.pymes_backend.infrastructure.repository.SaleRepository;
@@ -23,6 +25,7 @@ import es.pedro.pymes_backend.infrastructure.web.dto.ClientRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.ClientResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateExpenseRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateInventoryProductRequest;
+import es.pedro.pymes_backend.infrastructure.web.dto.CreateInventoryProductVariantRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.CreateSaleRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.InventoryProductResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.ProfessionalRequest;
@@ -75,7 +78,6 @@ public class DevDataSeeder implements ApplicationRunner {
     private static final int TARGET_INVENTORY_PRODUCTS = 160;
     private static final List<PaymentMethod> PAYMENT_METHODS = Arrays.asList(PaymentMethod.values());
     private static final List<LocalTime> APPOINTMENT_TIME_SLOTS = buildTimeSlots(LocalTime.of(9, 0), LocalTime.of(19, 30), 30);
-    private static final List<LocalTime> SALE_TIME_SLOTS = buildTimeSlots(LocalTime.of(9, 30), LocalTime.of(20, 0), 30);
 
     private static final List<CategorySeed> CATEGORY_SEEDS = buildCategorySeeds();
     private static final List<ServiceSeed> SERVICE_SEEDS = buildServiceSeeds();
@@ -103,6 +105,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final ClientRepository clientRepository;
     private final ProfessionalRepository professionalRepository;
     private final InventoryProductRepository inventoryProductRepository;
+    private final InventoryProductVariantRepository inventoryProductVariantRepository;
     private final ExpenseRepository expenseRepository;
     private final AppointmentRepository appointmentRepository;
     private final SaleRepository saleRepository;
@@ -246,9 +249,41 @@ public class DevDataSeeder implements ApplicationRunner {
 
         for (int index = 0; index < INVENTORY_TEMPLATES.size(); index++) {
             InventoryTemplate template = INVENTORY_TEMPLATES.get(index);
-            StockProfile stockProfile = resolveStockProfile(index);
-            int minimumStock = 2 + (index % 5);
-            int stock = resolveInitialStock(stockProfile, minimumStock, index);
+            if (template.hasVariants()) {
+                CreateInventoryProductRequest request = CreateInventoryProductRequest.builder()
+                        .name(template.name())
+                        .description(buildInventoryDescription(template.categoryName(), template.name(), template.sellable()))
+                        .categoryId(categoriesByName.get(template.categoryName()).getId())
+                        .hasVariants(true)
+                        .variants(buildVariantRequests(template))
+                        .build();
+
+                InventoryProductResponse created = inventoryProductService.createProduct(request);
+                List<SeededInventoryVariant> variants = buildSeededVariants(created, template);
+                products.add(new SeededInventoryProduct(
+                        created.getId(),
+                        created.getName(),
+                        null,
+                        template.sellable(),
+                        resolveStockProfile(created.getStock(), created.getMinimumStock()),
+                        template.categoryName(),
+                        true,
+                        variants
+                ));
+
+                summary.inventoryProductsCreated++;
+                summary.inventoryVariantsCreated += variants.size();
+                summary.automaticInventoryExpensesCreated += variants.stream()
+                        .mapToInt(variant -> variant.initialStock() > 0 ? 1 : 0)
+                        .sum();
+                continue;
+            }
+
+            StockProfile stockProfile = template.stock() != null
+                    ? resolveStockProfile(template.stock(), template.minimumStock())
+                    : resolveStockProfile(index);
+            int minimumStock = template.minimumStock() != null ? template.minimumStock() : 2 + (index % 5);
+            int stock = template.stock() != null ? template.stock() : resolveInitialStock(stockProfile, minimumStock, index);
 
             CreateInventoryProductRequest request = CreateInventoryProductRequest.builder()
                     .name(template.name())
@@ -256,8 +291,9 @@ public class DevDataSeeder implements ApplicationRunner {
                     .categoryId(categoriesByName.get(template.categoryName()).getId())
                     .stock(stock)
                     .minimumStock(minimumStock)
-                    .sku(index % 5 == 0 ? null : buildSku(template.categoryName(), index))
+                    .sku(template.sku() != null ? template.sku() : (index % 5 == 0 ? null : buildSku(template.categoryName(), index)))
                     .purchasePrice(template.purchasePrice())
+                    .hasVariants(false)
                     .build();
 
             InventoryProductResponse created = inventoryProductService.createProduct(request);
@@ -267,7 +303,9 @@ public class DevDataSeeder implements ApplicationRunner {
                     created.getPurchasePrice(),
                     template.sellable(),
                     stockProfile,
-                    template.categoryName()
+                    template.categoryName(),
+                    false,
+                    List.of()
             ));
 
             summary.inventoryProductsCreated++;
@@ -279,9 +317,88 @@ public class DevDataSeeder implements ApplicationRunner {
         return products;
     }
 
+    private List<CreateInventoryProductVariantRequest> buildVariantRequests(InventoryTemplate template) {
+        return template.variants().stream()
+                .map(variant -> CreateInventoryProductVariantRequest.builder()
+                        .variantLabel(variant.variantLabel())
+                        .sku(variant.sku())
+                        .stock(variant.stock())
+                        .minimumStock(variant.minimumStock())
+                        .purchasePrice(variant.purchasePrice())
+                        .attributes(variant.attributes())
+                        .build())
+                .toList();
+    }
+
+    private List<SeededInventoryVariant> buildSeededVariants(
+            InventoryProductResponse product,
+            InventoryTemplate template
+    ) {
+        Map<String, InventoryVariantTemplate> templatesByLabel = template.variants().stream()
+                .collect(Collectors.toMap(InventoryVariantTemplate::variantLabel, variant -> variant));
+
+        return product.getVariants().stream()
+                .map(variant -> {
+                    InventoryVariantTemplate variantTemplate = templatesByLabel.get(variant.getVariantLabel());
+                    int initialStock = variantTemplate != null ? variantTemplate.stock() : variant.getStock();
+                    return new SeededInventoryVariant(
+                            variant.getId(),
+                            variant.getVariantLabel(),
+                            variant.getSku(),
+                            variant.getPurchasePrice(),
+                            initialStock,
+                            resolveStockProfile(variant.getStock(), variant.getMinimumStock())
+                    );
+                })
+                .toList();
+    }
+
+    private List<SeededInventoryItem> buildInventoryItems(List<SeededInventoryProduct> inventoryProducts) {
+        List<SeededInventoryItem> items = new ArrayList<>();
+
+        for (SeededInventoryProduct product : inventoryProducts) {
+            if (product.hasVariants()) {
+                for (SeededInventoryVariant variant : product.variants()) {
+                    items.add(new SeededInventoryItem(
+                            product.id(),
+                            variant.id(),
+                            product.name(),
+                            product.name() + " - " + variant.variantLabel(),
+                            variant.purchasePrice(),
+                            product.sellable(),
+                            variant.stockProfile(),
+                            product.categoryName()
+                    ));
+                }
+                continue;
+            }
+
+            items.add(new SeededInventoryItem(
+                    product.id(),
+                    null,
+                    product.name(),
+                    product.name(),
+                    product.purchasePrice(),
+                    product.sellable(),
+                    product.stockProfile(),
+                    product.categoryName()
+            ));
+        }
+
+        return items;
+    }
+
+    private SeededInventoryItem requireDemoInventoryItem(List<SeededInventoryItem> inventoryItems, String itemName) {
+        return inventoryItems.stream()
+                .filter(item -> item.itemName().equals(itemName))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No existe item demo de inventario: " + itemName));
+    }
+
     private void seedExpenses(List<SeededInventoryProduct> inventoryProducts, SeedSummary summary) {
         seedRecurringExpenses(summary);
-        seedSupplyExpenses(inventoryProducts, summary);
+        seedShowcaseSupplyExpenses(inventoryProducts, summary);
+        seedMonthlySupplyExpenses(inventoryProducts, summary);
         seedStrategicExpenses(summary);
     }
 
@@ -323,10 +440,40 @@ public class DevDataSeeder implements ApplicationRunner {
         }
     }
 
-    private void seedSupplyExpenses(List<SeededInventoryProduct> inventoryProducts, SeedSummary summary) {
-        List<SeededInventoryProduct> supplyCandidates = inventoryProducts.stream()
-                .filter(SeededInventoryProduct::sellable)
-                .filter(product -> product.stockProfile() == StockProfile.HIGH || product.stockProfile() == StockProfile.BALANCED)
+    private void seedShowcaseSupplyExpenses(List<SeededInventoryProduct> inventoryProducts, SeedSummary summary) {
+        List<SeededInventoryItem> inventoryItems = buildInventoryItems(inventoryProducts);
+        List<SeededInventoryItem> showcaseItems = List.of(
+                requireDemoInventoryItem(inventoryItems, "Champu L'Oreal Prof"),
+                requireDemoInventoryItem(inventoryItems, "Acondicionador Kerastase"),
+                requireDemoInventoryItem(inventoryItems, "Camiseta Basica - Roja / M"),
+                requireDemoInventoryItem(inventoryItems, "Tornillo Galvanizado - 6mm / 40mm")
+        );
+
+        for (int index = 0; index < showcaseItems.size(); index++) {
+            SeededInventoryItem item = showcaseItems.get(index);
+            int quantity = item.variant() && item.itemName().startsWith("Tornillo") ? 20 : 4 + index;
+
+            expenseService.createExpense(
+                    CreateExpenseRequest.builder()
+                            .expenseDate(LocalDate.of(2026, 3, 4).plusDays(index * 7L))
+                            .concept(item.itemName())
+                            .category(ExpenseCategory.SUPPLIES)
+                            .quantity(quantity)
+                            .amount(item.purchasePrice())
+                            .notes("Reposicion demo con referencia directa de inventario.")
+                            .inventoryProductId(item.productId())
+                            .inventoryProductVariantId(item.variantId())
+                            .build()
+            );
+
+            summary.manualExpensesCreated++;
+        }
+    }
+
+    private void seedMonthlySupplyExpenses(List<SeededInventoryProduct> inventoryProducts, SeedSummary summary) {
+        List<SeededInventoryItem> supplyCandidates = buildInventoryItems(inventoryProducts).stream()
+                .filter(SeededInventoryItem::sellable)
+                .filter(item -> item.stockProfile() == StockProfile.HIGH || item.stockProfile() == StockProfile.BALANCED)
                 .toList();
 
         YearMonth month = FIRST_SEED_MONTH;
@@ -337,17 +484,19 @@ public class DevDataSeeder implements ApplicationRunner {
             int supplyCount = plan.targetOutcome() == OutcomeTarget.GAIN ? 3 : 2;
 
             for (int index = 0; index < supplyCount; index++) {
-                SeededInventoryProduct product = supplyCandidates.get(Math.floorMod(globalIndex * 3 + index, supplyCandidates.size()));
+                SeededInventoryItem item = supplyCandidates.get(Math.floorMod(globalIndex * 3 + index, supplyCandidates.size()));
                 int quantity = 3 + Math.floorMod(globalIndex + index, 5);
 
                 expenseService.createExpense(
                         CreateExpenseRequest.builder()
                                 .expenseDate(resolveExpenseDate(month, 8 + (index * 7)))
-                                .concept(product.name())
+                                .concept(item.itemName())
                                 .category(ExpenseCategory.SUPPLIES)
                                 .quantity(quantity)
-                                .amount(product.purchasePrice().multiply(BigDecimal.valueOf(quantity)).setScale(2, RoundingMode.HALF_UP))
+                                .amount(item.purchasePrice())
                                 .notes(noteFrom(EXPENSE_NOTES, globalIndex + index))
+                                .inventoryProductId(item.productId())
+                                .inventoryProductVariantId(item.variantId())
                                 .build()
                 );
 
@@ -474,8 +623,44 @@ public class DevDataSeeder implements ApplicationRunner {
             List<SeededInventoryProduct> inventoryProducts,
             SeedSummary summary
     ) {
+        seedShowcaseManualProductSales(clients, inventoryProducts, summary);
         ensureWeeklyProductSalesCoverage(clients, inventoryProducts, summary);
         seedManualServiceSales(clients, services, summary);
+    }
+
+    private void seedShowcaseManualProductSales(
+            List<ClientResponse> clients,
+            List<SeededInventoryProduct> inventoryProducts,
+            SeedSummary summary
+    ) {
+        List<SeededInventoryItem> inventoryItems = buildInventoryItems(inventoryProducts);
+        List<SeededInventoryItem> showcaseItems = List.of(
+                requireDemoInventoryItem(inventoryItems, "Champu L'Oreal Prof"),
+                requireDemoInventoryItem(inventoryItems, "Crema Hidratante Facial"),
+                requireDemoInventoryItem(inventoryItems, "Camiseta Basica - Azul / M"),
+                requireDemoInventoryItem(inventoryItems, "Tornillo Galvanizado - 4mm / 30mm")
+        );
+
+        for (int index = 0; index < showcaseItems.size(); index++) {
+            SeededInventoryItem item = showcaseItems.get(index);
+            int quantity = item.variant() && item.itemName().startsWith("Tornillo") ? 12 : 1;
+
+            saleService.createManualSale(
+                    CreateSaleRequest.builder()
+                            .clientId(resolveManualSaleClientId(clients, 30_000 + index, 50))
+                            .itemType(SaleItemType.PRODUCT)
+                            .inventoryProductId(item.productId())
+                            .inventoryProductVariantId(item.variantId())
+                            .unitPrice(calculateProductSalePrice(item.purchasePrice(), item.categoryName()))
+                            .quantity(quantity)
+                            .paymentMethod(paymentMethodFrom(30_000 + index))
+                            .saleDate(LocalDate.of(2026, 4, 2).plusDays(index * 4L))
+                            .notes("Venta demo con referencia directa de inventario.")
+                            .build()
+            );
+
+            summary.manualProductSalesCreated++;
+        }
     }
 
     private void ensureWeeklyProductSalesCoverage(
@@ -483,13 +668,20 @@ public class DevDataSeeder implements ApplicationRunner {
             List<SeededInventoryProduct> inventoryProducts,
             SeedSummary summary
     ) {
-        List<SeededInventoryProduct> sellableProducts = inventoryProducts.stream()
-                .filter(SeededInventoryProduct::sellable)
+        List<SeededInventoryItem> sellableItems = buildInventoryItems(inventoryProducts).stream()
+                .filter(SeededInventoryItem::sellable)
                 .toList();
         Map<Long, InventoryProductEntity> productsById = inventoryProductRepository.findAll().stream()
                 .filter(product -> Boolean.TRUE.equals(product.getActive()))
                 .collect(Collectors.toMap(InventoryProductEntity::getId, product -> product));
-        Map<Long, Integer> sellableUnitsByProductId = buildSellableUnitsMap(sellableProducts, productsById);
+        Map<Long, InventoryProductVariantEntity> variantsById = inventoryProductVariantRepository.findAll().stream()
+                .filter(variant -> Boolean.TRUE.equals(variant.getActive()))
+                .collect(Collectors.toMap(InventoryProductVariantEntity::getId, variant -> variant));
+        Map<InventoryItemKey, Integer> sellableUnitsByItem = buildSellableUnitsMap(
+                sellableItems,
+                productsById,
+                variantsById
+        );
 
         LocalDate weekStart = SEED_START_DATE.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         int globalIndex = 0;
@@ -504,7 +696,11 @@ public class DevDataSeeder implements ApplicationRunner {
             int weeklySales = Math.max(WEEKLY_PRODUCT_SALES_MIN, plan.productSalesPerWeek());
 
             for (int saleIndex = 0; saleIndex < weeklySales; saleIndex++) {
-                SeededInventoryProduct product = selectProductForSale(sellableProducts, sellableUnitsByProductId, globalIndex + saleIndex);
+                SeededInventoryItem item = selectInventoryItemForSale(
+                        sellableItems,
+                        sellableUnitsByItem,
+                        globalIndex + saleIndex
+                );
                 LocalDate saleDate = weekStart.plusDays(saleIndex % 5);
                 if (saleDate.isAfter(SEED_END_DATE)) {
                     saleDate = SEED_END_DATE;
@@ -514,17 +710,17 @@ public class DevDataSeeder implements ApplicationRunner {
                         CreateSaleRequest.builder()
                                 .clientId(resolveManualSaleClientId(clients, globalIndex + saleIndex, 60))
                                 .itemType(SaleItemType.PRODUCT)
-                                .inventoryProductId(product.id())
-                                .unitPrice(calculateProductSalePrice(product.purchasePrice(), product.categoryName()))
+                                .inventoryProductId(item.productId())
+                                .inventoryProductVariantId(item.variantId())
+                                .unitPrice(calculateProductSalePrice(item.purchasePrice(), item.categoryName()))
                                 .quantity(1)
                                 .paymentMethod(paymentMethodFrom(globalIndex + saleIndex))
                                 .saleDate(saleDate)
-                                .saleTime(selectSaleTime(globalIndex + saleIndex))
                                 .notes(noteFrom(SALE_NOTES, globalIndex + saleIndex))
                                 .build()
                 );
 
-                sellableUnitsByProductId.computeIfPresent(product.id(), (key, value) -> value - 1);
+                sellableUnitsByItem.computeIfPresent(item.key(), (key, value) -> value - 1);
                 summary.manualProductSalesCreated++;
             }
 
@@ -563,7 +759,6 @@ public class DevDataSeeder implements ApplicationRunner {
                                 .quantity(1)
                                 .paymentMethod(paymentMethodFrom(globalIndex + saleIndex))
                                 .saleDate(saleDate)
-                                .saleTime(selectSaleTime(globalIndex + saleIndex))
                                 .notes(noteFrom(SALE_NOTES, globalIndex + saleIndex))
                                 .build()
                 );
@@ -671,7 +866,6 @@ public class DevDataSeeder implements ApplicationRunner {
                             .quantity(quantity)
                             .paymentMethod(paymentMethodFrom(offset + index))
                             .saleDate(saleDate)
-                            .saleTime(selectSaleTime(offset + index))
                             .notes("Ajuste dirigido del seed para reforzar escenario economico.")
                             .build()
             );
@@ -787,10 +981,6 @@ public class DevDataSeeder implements ApplicationRunner {
         return APPOINTMENT_TIME_SLOTS.get(Math.floorMod(sequence * multiplier + (dailyCoverage ? 1 : 3), APPOINTMENT_TIME_SLOTS.size()));
     }
 
-    private LocalTime selectSaleTime(int sequence) {
-        return SALE_TIME_SLOTS.get(Math.floorMod(sequence * 3 + 2, SALE_TIME_SLOTS.size()));
-    }
-
     private Double calculateAppointmentPrice(Double basePrice, MonthPlan plan, int sequence) {
         BigDecimal price = BigDecimal.valueOf(basePrice)
                 .multiply(plan.appointmentPriceFactor())
@@ -817,28 +1007,24 @@ public class DevDataSeeder implements ApplicationRunner {
         return purchasePrice.multiply(markup).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private Map<Long, Integer> buildSellableUnitsMap(
-            List<SeededInventoryProduct> sellableProducts,
-            Map<Long, InventoryProductEntity> productsById
+    private Map<InventoryItemKey, Integer> buildSellableUnitsMap(
+            List<SeededInventoryItem> sellableItems,
+            Map<Long, InventoryProductEntity> productsById,
+            Map<Long, InventoryProductVariantEntity> variantsById
     ) {
-        Map<Long, Integer> sellableUnits = new HashMap<>();
+        Map<InventoryItemKey, Integer> sellableUnits = new HashMap<>();
         int totalSellableUnits = 0;
 
-        for (SeededInventoryProduct product : sellableProducts) {
-            InventoryProductEntity entity = productsById.get(product.id());
-            if (entity == null) {
+        for (SeededInventoryItem item : sellableItems) {
+            StockSnapshot stockSnapshot = resolveCurrentStockSnapshot(item, productsById, variantsById);
+            if (stockSnapshot == null) {
                 continue;
             }
 
-            int protectedStock = switch (product.stockProfile()) {
-                case OUT -> entity.getStock();
-                case LOW -> Math.max(0, entity.getMinimumStock() - 1);
-                case BALANCED -> entity.getMinimumStock() + 2;
-                case HIGH -> entity.getMinimumStock() + 8;
-            };
+            int protectedStock = calculateProtectedStock(item.stockProfile(), stockSnapshot.stock(), stockSnapshot.minimumStock());
 
-            int sellable = Math.max(0, entity.getStock() - protectedStock);
-            sellableUnits.put(product.id(), sellable);
+            int sellable = Math.max(0, stockSnapshot.stock() - protectedStock);
+            sellableUnits.put(item.key(), sellable);
             totalSellableUnits += sellable;
         }
 
@@ -850,17 +1036,40 @@ public class DevDataSeeder implements ApplicationRunner {
         return sellableUnits;
     }
 
-    private SeededInventoryProduct selectProductForSale(
-            List<SeededInventoryProduct> sellableProducts,
-            Map<Long, Integer> sellableUnitsByProductId,
+    private StockSnapshot resolveCurrentStockSnapshot(
+            SeededInventoryItem item,
+            Map<Long, InventoryProductEntity> productsById,
+            Map<Long, InventoryProductVariantEntity> variantsById
+    ) {
+        if (item.variant()) {
+            InventoryProductVariantEntity variant = variantsById.get(item.variantId());
+            return variant == null ? null : new StockSnapshot(variant.getStock(), variant.getMinimumStock());
+        }
+
+        InventoryProductEntity product = productsById.get(item.productId());
+        return product == null ? null : new StockSnapshot(product.getStock(), product.getMinimumStock());
+    }
+
+    private int calculateProtectedStock(StockProfile stockProfile, int stock, int minimumStock) {
+        return switch (stockProfile) {
+            case OUT -> stock;
+            case LOW -> Math.max(0, minimumStock - 1);
+            case BALANCED -> minimumStock + 2;
+            case HIGH -> minimumStock + 8;
+        };
+    }
+
+    private SeededInventoryItem selectInventoryItemForSale(
+            List<SeededInventoryItem> sellableItems,
+            Map<InventoryItemKey, Integer> sellableUnitsByItem,
             int sequence
     ) {
-        int startIndex = Math.floorMod(sequence * 7, sellableProducts.size());
+        int startIndex = Math.floorMod(sequence * 7, sellableItems.size());
 
-        for (int offset = 0; offset < sellableProducts.size(); offset++) {
-            SeededInventoryProduct product = sellableProducts.get((startIndex + offset) % sellableProducts.size());
-            if (sellableUnitsByProductId.getOrDefault(product.id(), 0) > 0) {
-                return product;
+        for (int offset = 0; offset < sellableItems.size(); offset++) {
+            SeededInventoryItem item = sellableItems.get((startIndex + offset) % sellableItems.size());
+            if (sellableUnitsByItem.getOrDefault(item.key(), 0) > 0) {
+                return item;
             }
         }
 
@@ -978,6 +1187,19 @@ public class DevDataSeeder implements ApplicationRunner {
             case BALANCED -> minimumStock + 2 + (index % 4);
             case HIGH -> minimumStock + 18 + (index % 15);
         };
+    }
+
+    private StockProfile resolveStockProfile(int stock, int minimumStock) {
+        if (stock == 0) {
+            return StockProfile.OUT;
+        }
+        if (stock <= minimumStock) {
+            return StockProfile.LOW;
+        }
+        if (stock <= minimumStock + 8) {
+            return StockProfile.BALANCED;
+        }
+        return StockProfile.HIGH;
     }
 
     private String buildInventoryDescription(String categoryName, String productName, boolean sellable) {
@@ -1244,6 +1466,8 @@ public class DevDataSeeder implements ApplicationRunner {
     private static List<InventoryTemplate> buildInventoryTemplates() {
         List<InventoryTemplate> templates = new ArrayList<>(TARGET_INVENTORY_PRODUCTS);
 
+        addFeaturedInventoryTemplates(templates);
+
         addInventoryTemplates(
                 templates,
                 "Retail Profesional",
@@ -1312,6 +1536,103 @@ public class DevDataSeeder implements ApplicationRunner {
         return List.copyOf(templates.stream().limit(TARGET_INVENTORY_PRODUCTS).toList());
     }
 
+    private static void addFeaturedInventoryTemplates(List<InventoryTemplate> templates) {
+        templates.add(InventoryTemplate.simple(
+                "Champu L'Oreal Prof",
+                "Retail Profesional",
+                money("7.90"),
+                true,
+                45,
+                10,
+                "DEM-RTL-CHAMP-001"
+        ));
+        templates.add(InventoryTemplate.simple(
+                "Acondicionador Kerastase",
+                "Retail Profesional",
+                money("9.40"),
+                true,
+                36,
+                8,
+                "DEM-RTL-ACOND-001"
+        ));
+        templates.add(InventoryTemplate.simple(
+                "Laca Fijacion Fuerte",
+                "Retail Profesional",
+                money("5.20"),
+                true,
+                28,
+                6,
+                "DEM-RTL-LACA-001"
+        ));
+        templates.add(InventoryTemplate.simple(
+                "Crema Hidratante Facial",
+                "Estetica Facial",
+                money("8.60"),
+                true,
+                30,
+                6,
+                "DEM-EST-CREMA-001"
+        ));
+        templates.add(InventoryTemplate.simple(
+                "Aceite Esencial Lavanda",
+                "Masajes y Bienestar",
+                money("6.70"),
+                true,
+                22,
+                5,
+                "DEM-MAS-ACEITE-001"
+        ));
+        templates.add(InventoryTemplate.simple(
+                "Mascara Facial Vitamina C",
+                "Estetica Facial",
+                money("8.95"),
+                true,
+                26,
+                6,
+                "DEM-EST-MASC-001"
+        ));
+        templates.add(InventoryTemplate.simple(
+                "Aceite Barba Cedar",
+                "Barberia",
+                money("5.80"),
+                true,
+                24,
+                5,
+                "DEM-BAR-ACEITE-001"
+        ));
+        templates.add(InventoryTemplate.simple(
+                "Esmalte Semipermanente Nude",
+                "Unas",
+                money("4.90"),
+                true,
+                32,
+                8,
+                "DEM-UNA-ESMALTE-001"
+        ));
+        templates.add(InventoryTemplate.withVariants(
+                "Camiseta Basica",
+                "Retail Profesional",
+                true,
+                List.of(
+                        InventoryVariantTemplate.of("Roja / S", "DEM-CAM-ROJ-S", 34, 6, money("6.80"), Map.of("color", "Roja", "talla", "S")),
+                        InventoryVariantTemplate.of("Roja / M", "DEM-CAM-ROJ-M", 38, 8, money("6.80"), Map.of("color", "Roja", "talla", "M")),
+                        InventoryVariantTemplate.of("Azul / M", "DEM-CAM-AZU-M", 32, 8, money("6.90"), Map.of("color", "Azul", "talla", "M")),
+                        InventoryVariantTemplate.of("Azul / L", "DEM-CAM-AZU-L", 28, 6, money("6.90"), Map.of("color", "Azul", "talla", "L"))
+                )
+        ));
+        templates.add(InventoryTemplate.withVariants(
+                "Tornillo Galvanizado",
+                "Retail Profesional",
+                true,
+                List.of(
+                        InventoryVariantTemplate.of("4mm / 20mm", "DEM-TOR-4-20", 90, 15, money("0.12"), Map.of("diametro", "4mm", "largo", "20mm")),
+                        InventoryVariantTemplate.of("4mm / 30mm", "DEM-TOR-4-30", 84, 15, money("0.14"), Map.of("diametro", "4mm", "largo", "30mm")),
+                        InventoryVariantTemplate.of("6mm / 40mm", "DEM-TOR-6-40", 72, 12, money("0.18"), Map.of("diametro", "6mm", "largo", "40mm")),
+                        InventoryVariantTemplate.of("8mm / 50mm", "DEM-TOR-8-50", 60, 10, money("0.24"), Map.of("diametro", "8mm", "largo", "50mm"))
+                )
+        ));
+    }
+
     private static void addInventoryTemplates(
             List<InventoryTemplate> target,
             String categoryName,
@@ -1327,9 +1648,15 @@ public class DevDataSeeder implements ApplicationRunner {
                         .add(BigDecimal.valueOf(typeIndex).multiply(new BigDecimal("0.45")))
                         .add(BigDecimal.valueOf(lineIndex).multiply(new BigDecimal("0.30")))
                         .setScale(2, RoundingMode.HALF_UP);
-                target.add(new InventoryTemplate(name, categoryName, price, sellable));
+                if (!containsInventoryTemplateName(target, name)) {
+                    target.add(InventoryTemplate.generated(name, categoryName, price, sellable));
+                }
             }
         }
+    }
+
+    private static boolean containsInventoryTemplateName(List<InventoryTemplate> templates, String name) {
+        return templates.stream().anyMatch(template -> template.name().equalsIgnoreCase(name));
     }
 
     private record CategorySeed(String name, String color, String icon) {
@@ -1358,7 +1685,66 @@ public class DevDataSeeder implements ApplicationRunner {
     private record SeededProfessional(ProfessionalResponse response, ProfessionalSeed seed) {
     }
 
-    private record InventoryTemplate(String name, String categoryName, BigDecimal purchasePrice, boolean sellable) {
+    private record InventoryTemplate(
+            String name,
+            String categoryName,
+            BigDecimal purchasePrice,
+            boolean sellable,
+            Integer stock,
+            Integer minimumStock,
+            String sku,
+            List<InventoryVariantTemplate> variants
+    ) {
+
+        static InventoryTemplate generated(String name, String categoryName, BigDecimal purchasePrice, boolean sellable) {
+            return new InventoryTemplate(name, categoryName, purchasePrice, sellable, null, null, null, List.of());
+        }
+
+        static InventoryTemplate simple(
+                String name,
+                String categoryName,
+                BigDecimal purchasePrice,
+                boolean sellable,
+                int stock,
+                int minimumStock,
+                String sku
+        ) {
+            return new InventoryTemplate(name, categoryName, purchasePrice, sellable, stock, minimumStock, sku, List.of());
+        }
+
+        static InventoryTemplate withVariants(
+                String name,
+                String categoryName,
+                boolean sellable,
+                List<InventoryVariantTemplate> variants
+        ) {
+            return new InventoryTemplate(name, categoryName, null, sellable, 0, 0, null, variants);
+        }
+
+        boolean hasVariants() {
+            return !variants.isEmpty();
+        }
+    }
+
+    private record InventoryVariantTemplate(
+            String variantLabel,
+            String sku,
+            int stock,
+            int minimumStock,
+            BigDecimal purchasePrice,
+            Map<String, String> attributes
+    ) {
+
+        static InventoryVariantTemplate of(
+                String variantLabel,
+                String sku,
+                int stock,
+                int minimumStock,
+                BigDecimal purchasePrice,
+                Map<String, String> attributes
+        ) {
+            return new InventoryVariantTemplate(variantLabel, sku, stock, minimumStock, purchasePrice, attributes);
+        }
     }
 
     private record SeededInventoryProduct(
@@ -1367,8 +1753,45 @@ public class DevDataSeeder implements ApplicationRunner {
             BigDecimal purchasePrice,
             boolean sellable,
             StockProfile stockProfile,
+            String categoryName,
+            boolean hasVariants,
+            List<SeededInventoryVariant> variants
+    ) {
+    }
+
+    private record SeededInventoryVariant(
+            Long id,
+            String variantLabel,
+            String sku,
+            BigDecimal purchasePrice,
+            int initialStock,
+            StockProfile stockProfile
+    ) {
+    }
+
+    private record SeededInventoryItem(
+            Long productId,
+            Long variantId,
+            String productName,
+            String itemName,
+            BigDecimal purchasePrice,
+            boolean sellable,
+            StockProfile stockProfile,
             String categoryName
     ) {
+        boolean variant() {
+            return variantId != null;
+        }
+
+        InventoryItemKey key() {
+            return new InventoryItemKey(productId, variantId);
+        }
+    }
+
+    private record InventoryItemKey(Long productId, Long variantId) {
+    }
+
+    private record StockSnapshot(int stock, int minimumStock) {
     }
 
     private record RecurringExpenseTemplate(
@@ -1459,6 +1882,7 @@ public class DevDataSeeder implements ApplicationRunner {
         private int clientsCreated;
         private int professionalsCreated;
         private int inventoryProductsCreated;
+        private int inventoryVariantsCreated;
         private int automaticInventoryExpensesCreated;
         private int manualExpensesCreated;
         private int appointmentsCreated;
@@ -1484,6 +1908,7 @@ public class DevDataSeeder implements ApplicationRunner {
                     + ", clientes=" + totalClients
                     + ", profesionales=" + totalProfessionals
                     + ", inventario=" + totalInventoryProducts
+                    + ", variantesInventario=" + inventoryVariantsCreated
                     + ", gastosTotales=" + totalExpenses
                     + ", citasTotales=" + totalAppointments
                     + ", ventasTotales=" + totalSales

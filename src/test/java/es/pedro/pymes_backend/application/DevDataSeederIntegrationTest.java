@@ -2,8 +2,10 @@ package es.pedro.pymes_backend.application;
 
 import es.pedro.pymes_backend.domain.AppointmentEntity;
 import es.pedro.pymes_backend.domain.AppointmentStatus;
+import es.pedro.pymes_backend.domain.ExpenseCategory;
 import es.pedro.pymes_backend.domain.ExpenseEntity;
 import es.pedro.pymes_backend.domain.InventoryProductEntity;
+import es.pedro.pymes_backend.domain.InventoryProductVariantEntity;
 import es.pedro.pymes_backend.domain.SaleEntity;
 import es.pedro.pymes_backend.domain.SaleItemType;
 import es.pedro.pymes_backend.domain.SaleSourceType;
@@ -12,6 +14,7 @@ import es.pedro.pymes_backend.infrastructure.repository.CategoryRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ClientRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ExpenseRepository;
 import es.pedro.pymes_backend.infrastructure.repository.InventoryProductRepository;
+import es.pedro.pymes_backend.infrastructure.repository.InventoryProductVariantRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ProfessionalRepository;
 import es.pedro.pymes_backend.infrastructure.repository.SaleRepository;
 import es.pedro.pymes_backend.infrastructure.repository.ServiceRepository;
@@ -58,6 +61,9 @@ class DevDataSeederIntegrationTest {
     private InventoryProductRepository inventoryProductRepository;
 
     @Autowired
+    private InventoryProductVariantRepository inventoryProductVariantRepository;
+
+    @Autowired
     private ExpenseRepository expenseRepository;
 
     @Autowired
@@ -72,12 +78,14 @@ class DevDataSeederIntegrationTest {
         List<SaleEntity> sales = saleRepository.findAll();
         List<ExpenseEntity> expenses = expenseRepository.findAll();
         List<InventoryProductEntity> products = inventoryProductRepository.findAll();
+        List<InventoryProductVariantEntity> variants = inventoryProductVariantRepository.findAll();
 
         assertThat(categoryRepository.count()).isEqualTo(10);
         assertThat(serviceRepository.count()).isEqualTo(40);
         assertThat(clientRepository.count()).isEqualTo(360);
         assertThat(professionalRepository.count()).isEqualTo(7);
         assertThat(inventoryProductRepository.count()).isEqualTo(160);
+        assertThat(inventoryProductVariantRepository.count()).isGreaterThanOrEqualTo(8);
         assertThat(expenseRepository.count()).isGreaterThanOrEqualTo(500);
         assertThat(appointmentRepository.count()).isGreaterThanOrEqualTo(2000);
         assertThat(saleRepository.count()).isGreaterThanOrEqualTo(2400);
@@ -104,12 +112,15 @@ class DevDataSeederIntegrationTest {
         assertWeeklyProductSalesCoverage(sales);
         assertEconomicDiversity(sales, expenses);
         assertInventoryDiversity(products);
+        assertVariantInventoryDemoData(products, variants);
+        assertVariantSalesAndExpenses(sales, expenses);
 
         long categoryCount = categoryRepository.count();
         long serviceCount = serviceRepository.count();
         long clientCount = clientRepository.count();
         long professionalCount = professionalRepository.count();
         long inventoryCount = inventoryProductRepository.count();
+        long variantCount = inventoryProductVariantRepository.count();
         long expenseCount = expenseRepository.count();
         long appointmentCount = appointmentRepository.count();
         long saleCount = saleRepository.count();
@@ -121,6 +132,7 @@ class DevDataSeederIntegrationTest {
         assertThat(clientRepository.count()).isEqualTo(clientCount);
         assertThat(professionalRepository.count()).isEqualTo(professionalCount);
         assertThat(inventoryProductRepository.count()).isEqualTo(inventoryCount);
+        assertThat(inventoryProductVariantRepository.count()).isEqualTo(variantCount);
         assertThat(expenseRepository.count()).isEqualTo(expenseCount);
         assertThat(appointmentRepository.count()).isEqualTo(appointmentCount);
         assertThat(saleRepository.count()).isEqualTo(saleCount);
@@ -179,6 +191,90 @@ class DevDataSeederIntegrationTest {
         assertThat(products).anyMatch(product -> product.getStock() == 0);
         assertThat(products).anyMatch(product -> product.getStock() > 0 && product.getStock() <= product.getMinimumStock());
         assertThat(products).anyMatch(product -> product.getStock() > product.getMinimumStock() + 8);
+    }
+
+    private void assertVariantInventoryDemoData(
+            List<InventoryProductEntity> products,
+            List<InventoryProductVariantEntity> variants
+    ) {
+        assertThat(products)
+                .filteredOn(product -> !Boolean.TRUE.equals(product.getHasVariants()))
+                .extracting(InventoryProductEntity::getName)
+                .contains(
+                        "Champu L'Oreal Prof",
+                        "Acondicionador Kerastase",
+                        "Laca Fijacion Fuerte",
+                        "Crema Hidratante Facial",
+                        "Aceite Esencial Lavanda"
+                );
+
+        assertVariantProduct(products, "Camiseta Basica", List.of("Roja / S", "Roja / M", "Azul / M", "Azul / L"));
+        assertVariantProduct(products, "Tornillo Galvanizado", List.of("4mm / 20mm", "4mm / 30mm", "6mm / 40mm", "8mm / 50mm"));
+
+        assertThat(variants)
+                .filteredOn(variant -> Boolean.TRUE.equals(variant.getActive()))
+                .hasSizeGreaterThanOrEqualTo(8)
+                .allSatisfy(variant -> {
+                    assertThat(variant.getSku()).isNotBlank();
+                    assertThat(variant.getStock()).isNotNegative();
+                    assertThat(variant.getMinimumStock()).isNotNegative();
+                    assertThat(variant.getPurchasePrice()).isGreaterThan(BigDecimal.ZERO);
+                });
+    }
+
+    private void assertVariantProduct(
+            List<InventoryProductEntity> products,
+            String productName,
+            List<String> expectedLabels
+    ) {
+        InventoryProductEntity product = findProduct(products, productName);
+        assertThat(product.getHasVariants()).isTrue();
+        assertThat(product.getStock()).isZero();
+        assertThat(product.getMinimumStock()).isZero();
+        assertThat(product.getSku()).isNull();
+        assertThat(product.getPurchasePrice()).isNull();
+
+        List<InventoryProductVariantEntity> activeVariants =
+                inventoryProductVariantRepository.findByProductIdAndActiveTrueOrderByVariantLabelAscIdAsc(product.getId());
+
+        assertThat(activeVariants)
+                .extracting(InventoryProductVariantEntity::getVariantLabel)
+                .containsExactlyInAnyOrderElementsOf(expectedLabels);
+        assertThat(activeVariants.stream().mapToInt(InventoryProductVariantEntity::getStock).sum()).isPositive();
+    }
+
+    private void assertVariantSalesAndExpenses(List<SaleEntity> sales, List<ExpenseEntity> expenses) {
+        assertThat(sales).anyMatch(sale -> sale.getItemType() == SaleItemType.PRODUCT
+                && sale.getInventoryProduct() != null
+                && sale.getInventoryProductVariant() == null
+                && sale.getItemName().equals("Champu L'Oreal Prof"));
+        assertThat(sales).anyMatch(sale -> sale.getItemType() == SaleItemType.PRODUCT
+                && sale.getInventoryProduct() != null
+                && sale.getInventoryProductVariant() != null
+                && sale.getItemName().equals("Camiseta Basica - Azul / M"));
+
+        assertThat(expenses).anyMatch(expense -> expense.getCategory() == ExpenseCategory.SUPPLIES
+                && expense.getInventoryProduct() != null
+                && expense.getInventoryProductVariant() == null
+                && expense.getConcept().equals("Champu L'Oreal Prof")
+                && Boolean.TRUE.equals(expense.getStockMovementApplied()));
+        assertThat(expenses).anyMatch(expense -> expense.getCategory() == ExpenseCategory.SUPPLIES
+                && expense.getInventoryProduct() != null
+                && expense.getInventoryProductVariant() != null
+                && expense.getConcept().equals("Camiseta Basica - Roja / M")
+                && Boolean.TRUE.equals(expense.getStockMovementApplied()));
+        assertThat(expenses).anyMatch(expense -> expense.getCategory() == ExpenseCategory.SUPPLIES
+                && expense.getInventoryProduct() != null
+                && expense.getInventoryProductVariant() != null
+                && expense.getConcept().equals("Tornillo Galvanizado - 4mm / 20mm")
+                && Boolean.FALSE.equals(expense.getStockMovementApplied()));
+    }
+
+    private InventoryProductEntity findProduct(List<InventoryProductEntity> products, String productName) {
+        return products.stream()
+                .filter(product -> product.getName().equals(productName))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No existe producto demo: " + productName));
     }
 
     private BigDecimal profitBetween(List<SaleEntity> sales, List<ExpenseEntity> expenses, LocalDate fromDate, LocalDate toDate) {

@@ -46,7 +46,6 @@ public class SalePdfServiceImpl implements SalePdfService {
                 spec,
                 Sort.by(
                         Sort.Order.desc("saleDate"),
-                        Sort.Order.desc("saleTime"),
                         Sort.Order.desc("id")
                 )
         );

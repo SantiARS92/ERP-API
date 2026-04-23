@@ -32,7 +32,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -68,7 +67,6 @@ public class SaleServiceImpl implements SaleService {
                 request.getQuantity(),
                 request.getPaymentMethod(),
                 request.getSaleDate(),
-                request.getSaleTime(),
                 request.getNotes()
         );
 
@@ -97,7 +95,6 @@ public class SaleServiceImpl implements SaleService {
                 request.getQuantity(),
                 request.getPaymentMethod(),
                 request.getSaleDate(),
-                request.getSaleTime(),
                 request.getNotes()
         );
 
@@ -144,7 +141,6 @@ public class SaleServiceImpl implements SaleService {
                 size,
                 Sort.by(
                         Sort.Order.desc("saleDate"),
-                        Sort.Order.desc("saleTime"),
                         Sort.Order.desc("id")
                 )
         );
@@ -184,11 +180,11 @@ public class SaleServiceImpl implements SaleService {
                 limit,
                 Sort.by(
                         Sort.Order.desc("saleDate"),
-                        Sort.Order.desc("saleTime")
+                        Sort.Order.desc("id")
                 )
         );
 
-        return saleRepository.findBySaleDateGreaterThanEqualOrderBySaleDateDescSaleTimeDesc(fromDate, pageable)
+        return saleRepository.findBySaleDateGreaterThanEqualOrderBySaleDateDescIdDesc(fromDate, pageable)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -233,7 +229,6 @@ public class SaleServiceImpl implements SaleService {
         sale.setTotalAmount(unitPrice);
         sale.setPaymentMethod(null);
         sale.setSaleDate(appointment.getAppointmentDate());
-        sale.setSaleTime(appointment.getAppointmentTime());
         sale.setNotes(normalizeText(appointment.getInternalNotes()));
 
         saleRepository.save(sale);
@@ -260,7 +255,6 @@ public class SaleServiceImpl implements SaleService {
             Integer quantity,
             PaymentMethod paymentMethod,
             LocalDate saleDate,
-            LocalTime saleTime,
             String notes
     ) {
         if (itemType == null) {
@@ -271,9 +265,6 @@ public class SaleServiceImpl implements SaleService {
         }
         if (saleDate == null) {
             throw badRequest("La fecha de la venta es obligatoria");
-        }
-        if (saleTime == null) {
-            throw badRequest("La hora de la venta es obligatoria");
         }
 
         sale.setItemType(itemType);
@@ -306,7 +297,6 @@ public class SaleServiceImpl implements SaleService {
         sale.setTotalAmount(calculateTotal(sale.getUnitPrice(), quantity));
         sale.setPaymentMethod(paymentMethod);
         sale.setSaleDate(saleDate);
-        sale.setSaleTime(saleTime);
         sale.setNotes(normalizeText(notes));
     }
 
@@ -455,7 +445,6 @@ public class SaleServiceImpl implements SaleService {
                 .totalAmount(sale.getTotalAmount())
                 .paymentMethod(sale.getPaymentMethod())
                 .saleDate(sale.getSaleDate())
-                .saleTime(sale.getSaleTime())
                 .notes(sale.getNotes())
                 .createdAt(sale.getCreatedAt())
                 .updatedAt(sale.getUpdatedAt())

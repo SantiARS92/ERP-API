@@ -88,9 +88,9 @@ class ReportQueryRepositoryIntegrationTest {
         saveAppointmentSale(client, color, colorMarch, new BigDecimal("40.00"));
         saveAppointmentSale(client, haircut, haircutApril, new BigDecimal("30.00"));
 
-        saveProductSale(client, shampoo, 3, new BigDecimal("9.00"), LocalDate.of(2026, 3, 5), LocalTime.of(13, 0));
-        saveProductSale(client, conditioner, 2, new BigDecimal("10.00"), LocalDate.of(2026, 3, 20), LocalTime.of(16, 0));
-        saveProductSale(client, shampoo, 1, new BigDecimal("9.00"), LocalDate.of(2026, 4, 5), LocalTime.of(10, 30));
+        saveProductSale(client, shampoo, 3, new BigDecimal("9.00"), LocalDate.of(2026, 3, 5));
+        saveProductSale(client, conditioner, 2, new BigDecimal("10.00"), LocalDate.of(2026, 3, 20));
+        saveProductSale(client, shampoo, 1, new BigDecimal("9.00"), LocalDate.of(2026, 4, 5));
 
         saveExpense("Material marzo", LocalDate.of(2026, 3, 2), new BigDecimal("15.00"));
         saveExpense("Proveedor marzo", LocalDate.of(2026, 3, 20), new BigDecimal("10.00"));
@@ -294,7 +294,6 @@ class ReportQueryRepositoryIntegrationTest {
         sale.setQuantity(1);
         sale.setTotalAmount(totalAmount);
         sale.setSaleDate(appointment.getAppointmentDate());
-        sale.setSaleTime(appointment.getAppointmentTime());
         sale.setNotes("Venta desde cita");
         return saleRepository.saveAndFlush(sale);
     }
@@ -304,8 +303,7 @@ class ReportQueryRepositoryIntegrationTest {
             InventoryProductEntity product,
             int quantity,
             BigDecimal unitPrice,
-            LocalDate saleDate,
-            LocalTime saleTime
+            LocalDate saleDate
     ) {
         SaleEntity sale = new SaleEntity();
         sale.setSourceType(SaleSourceType.MANUAL);
@@ -320,7 +318,6 @@ class ReportQueryRepositoryIntegrationTest {
         sale.setQuantity(quantity);
         sale.setTotalAmount(unitPrice.multiply(BigDecimal.valueOf(quantity)));
         sale.setSaleDate(saleDate);
-        sale.setSaleTime(saleTime);
         sale.setNotes("Venta de producto");
         return saleRepository.saveAndFlush(sale);
     }

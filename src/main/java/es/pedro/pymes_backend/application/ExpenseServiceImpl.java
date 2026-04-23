@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -48,6 +50,7 @@ public class ExpenseServiceImpl implements ExpenseService {
                 null,
                 null
         );
+        applyInventorySupplyTotalAmount(expense, request.getAmount());
 
         ExpenseEntity saved = expenseRepository.save(expense);
         return mapToResponse(saved);
@@ -80,17 +83,20 @@ public class ExpenseServiceImpl implements ExpenseService {
                 previousInventoryProduct,
                 previousInventoryProductVariant
         );
+        applyInventorySupplyTotalAmount(expense, request.getAmount());
 
         ExpenseEntity updated = expenseRepository.save(expense);
         return mapToResponse(updated);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ExpenseResponse getExpenseById(Long id) {
-        return mapToResponse(getExpenseEntityById(id));
+        return mapToResponse(getExpenseEntityByIdWithInventoryReferences(id));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PagedResponse<ExpenseResponse> getExpenses(LocalDate fromDate, LocalDate toDate, String search, int page, int size) {
         validateDateRange(fromDate, toDate);
 
@@ -123,25 +129,22 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ExpenseResponse> getRecentExpenses(int limit) {
         if (limit < 1) {
             throw new BadRequestException("El límite debe ser mayor que 0");
         }
 
-        Pageable pageable = PageRequest.of(
-                0,
-                limit,
-                Sort.by(Sort.Order.desc("expenseDate"), Sort.Order.desc("id"))
-        );
+        Pageable pageable = PageRequest.of(0, limit);
 
-        return expenseRepository.findAll(pageable)
-                .getContent()
+        return expenseRepository.findRecentWithInventoryReferences(pageable)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<String> getConceptSuggestions(String query, ExpenseCategory category, int limit) {
         if (!StringUtils.hasText(query)) {
             return List.of();
@@ -169,6 +172,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public byte[] exportExpensesPdf(LocalDate fromDate, LocalDate toDate, String search) {
         validateDateRange(fromDate, toDate);
 
@@ -195,6 +199,11 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     private ExpenseEntity getExpenseEntityById(Long id) {
         return expenseRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Gasto no encontrado con id: " + id));
+    }
+
+    private ExpenseEntity getExpenseEntityByIdWithInventoryReferences(Long id) {
+        return expenseRepository.findByIdWithInventoryReferences(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Gasto no encontrado con id: " + id));
     }
 
@@ -353,6 +362,22 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     private boolean isStockMovementApplied(ExpenseEntity expense) {
         return !Boolean.FALSE.equals(expense.getStockMovementApplied());
+    }
+
+    private void applyInventorySupplyTotalAmount(ExpenseEntity expense, BigDecimal unitAmount) {
+        if (expense.getCategory() != ExpenseCategory.SUPPLIES
+                || !isStockMovementApplied(expense)
+                || !hasInventoryReference(expense)) {
+            return;
+        }
+
+        expense.setAmount(unitAmount
+                .multiply(BigDecimal.valueOf(expense.getQuantity()))
+                .setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private boolean hasInventoryReference(ExpenseEntity expense) {
+        return expense.getInventoryProduct() != null || expense.getInventoryProductVariant() != null;
     }
 
     private ExpenseResponse mapToResponse(ExpenseEntity expense) {

@@ -657,8 +657,8 @@ class ReportsApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
         saveServiceSale(marchAppointmentThree, manicureService, new BigDecimal("40.00"));
         saveServiceSale(marchAppointmentFour, manicureService, new BigDecimal("40.00"));
 
-        saveProductSale(serumProduct, 3, new BigDecimal("20.00"), LocalDate.of(2026, 3, 10), LocalTime.of(10, 30));
-        saveProductSale(shampooProduct, 2, new BigDecimal("15.00"), LocalDate.of(2026, 3, 11), LocalTime.of(11, 30));
+        saveProductSale(serumProduct, 3, new BigDecimal("20.00"), LocalDate.of(2026, 3, 10));
+        saveProductSale(shampooProduct, 2, new BigDecimal("15.00"), LocalDate.of(2026, 3, 11));
 
         saveExpense("Alquiler enero", new BigDecimal("20.00"), LocalDate.of(2026, 1, 7));
         saveExpense("Suministros febrero", new BigDecimal("40.00"), LocalDate.of(2026, 2, 12));
@@ -747,7 +747,6 @@ class ReportsApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
                         .quantity(1)
                         .totalAmount(totalAmount)
                         .saleDate(appointment.getAppointmentDate())
-                        .saleTime(appointment.getAppointmentTime())
                         .notes("Venta automatica de prueba")
                         .build()
         );
@@ -757,8 +756,7 @@ class ReportsApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
             InventoryProductEntity product,
             int quantity,
             BigDecimal unitPrice,
-            LocalDate saleDate,
-            LocalTime saleTime
+            LocalDate saleDate
     ) {
         saleRepository.saveAndFlush(
                 SaleEntity.builder()
@@ -772,7 +770,6 @@ class ReportsApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
                         .quantity(quantity)
                         .totalAmount(unitPrice.multiply(BigDecimal.valueOf(quantity)))
                         .saleDate(saleDate)
-                        .saleTime(saleTime)
                         .notes("Venta manual de prueba")
                         .build()
         );

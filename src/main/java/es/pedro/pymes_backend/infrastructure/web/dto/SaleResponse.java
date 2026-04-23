@@ -8,7 +8,6 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 @Getter
 @Setter
@@ -39,7 +38,6 @@ public class SaleResponse {
     private PaymentMethod paymentMethod;
 
     private LocalDate saleDate;
-    private LocalTime saleTime;
     private String notes;
 
     private LocalDateTime createdAt;
