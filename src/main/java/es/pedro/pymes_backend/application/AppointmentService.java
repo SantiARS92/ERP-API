@@ -77,7 +77,10 @@ public class AppointmentService {
         appointment.setStatus(request.getStatus());
         appointment.setInternalNotes(request.getInternalNotes());
 
-        return mapToResponse(appointmentRepository.save(appointment));
+        AppointmentEntity created = appointmentRepository.save(appointment);
+        syncAppointmentSale(created, false);
+
+        return mapToResponse(created);
     }
 
     public AppointmentResponse updateAppointment(Long id, AppointmentRequest request) {
@@ -112,13 +115,7 @@ public class AppointmentService {
         appointment.setInternalNotes(request.getInternalNotes());
 
         AppointmentEntity updated = appointmentRepository.save(appointment);
-
-        if (!wasConfirmedBefore && updated.getStatus() == AppointmentStatus.CONFIRMED) {
-            saleService.createSaleFromConfirmedAppointment(updated);
-        }
-        if (wasConfirmedBefore && updated.getStatus() != AppointmentStatus.CONFIRMED) {
-            saleService.deleteSaleFromAppointment(updated.getId());
-        }
+        syncAppointmentSale(updated, wasConfirmedBefore);
 
         return mapToResponse(updated);
     }
@@ -181,5 +178,14 @@ public class AppointmentService {
 
         appointment.setProfessionalId(professional.getId());
         appointment.setProfessionalName(professional.getFullName());
+    }
+
+    private void syncAppointmentSale(AppointmentEntity appointment, boolean wasConfirmedBefore) {
+        if (!wasConfirmedBefore && appointment.getStatus() == AppointmentStatus.CONFIRMED) {
+            saleService.createSaleFromConfirmedAppointment(appointment);
+        }
+        if (wasConfirmedBefore && appointment.getStatus() != AppointmentStatus.CONFIRMED) {
+            saleService.deleteSaleFromAppointment(appointment.getId());
+        }
     }
 }
