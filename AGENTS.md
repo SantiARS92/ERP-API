@@ -53,23 +53,47 @@ Credentials: `postgres` / `123456P`, DB: `pymes_app`.
 | `APP_AUTH_JWT_REFRESH_EXPIRATION_MS` | `604800000` (7 days) |
 | `app.seed.demo-data` | `false` |
 
-## Architecture
+## Architecture (Vertical Slices + DDD Layers)
+
+Each business domain is a vertical slice subdivided into 3 DDD layers:
 
 ```
-src/main/java/es/pedro/pymes_backend/
-├── domain/           # JPA entities + enums
-├── application/      # Business logic / use-case services
-└── infrastructure/
-    ├── repository/   # Spring Data JPA repos + report projections
-    ├── security/     # JWT filter, SecurityConfig
-    └── web/
-        ├── controller/   # REST controllers (all under /api)
-        ├── dto/          # Request/Response DTOs
-        ├── config/       # CORS (WebConfig)
-        └── exception/    # GlobalExceptionHandler + custom exceptions
+<slice>/
+├── domain/
+│   ├── models/             ← empty (future pure POJOs without JPA)
+│   └── enums/              ← Domain value objects (AppointmentStatus, etc.)
+├── application/            ← Use-case services, DTOs (Request/Response)
+└── infrastructure/         ← JPA entities, Spring Data repos, Controllers, PDF impl, Specifications
 ```
+
+```
+src/main/java/es/supplesoftware/autonomos_api/
+├── PymesBackendApplication.java
+├── common/                        # PagedResponse, exception handling
+├── config/                        # CORS (WebConfig)
+├── security/                      # JWT filter, SecurityConfig (flat — cross-cutting)
+├── auth/                          # Login, refresh, guest
+├── clients/                       # Client CRUD
+├── appointments/                  # Appointment CRUD → auto-creates sale
+├── services/                      # Professional services CRUD
+├── sales/                         # Sale CRUD + PDF
+├── expenses/                      # Expense CRUD + PDF
+├── products/                      # Inventory products + variants CRUD + PDF
+├── categories/                    # Categories CRUD
+├── professionals/                 # Professionals CRUD
+├── settings/                      # Business settings, opening hours, closures
+├── reports/                       # Report queries, projections, DTOs, PDF
+└── devdata/                       # DevDataSeeder, InventoryCreationExpenseRegistrar (flat)
+```
+
+Each slice with DDD layers (`domain/enums/` + `application/` + `infrastructure/`) is:
+`auth`, `clients`, `appointments`, `services`, `sales`, `expenses`, `products`, `categories`, `professionals`, `settings`, `reports`.
+
+Slices kept flat (no sub-layers): `security`, `config`, `devdata`, `common`, root.
 
 Entry point: `PymesBackendApplication.java`.
+
+Cross-slice references (e.g. `SaleEntity → ClientEntity`) are plain Java imports between infrastructure sub-packages.
 
 ## Testing conventions
 
