@@ -49,7 +49,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         CustomUserPrincipal principal;
         try {
-            principal = jwtService.extractPrincipal(token);
+            principal = jwtService.extractAccessPrincipal(token);
         } catch (JwtException | IllegalArgumentException ex) {
             SecurityContextHolder.clearContext();
             authenticationEntryPoint.commence(
@@ -76,6 +76,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return true;
         }
 
-        return "/api/auth/login".equals(path) || "/api/auth/guest".equals(path);
+        return "/api/auth/login".equals(path) || "/api/auth/guest".equals(path) || "/api/auth/refresh".equals(path);
     }
 }

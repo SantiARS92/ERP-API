@@ -100,11 +100,18 @@ public class AuthServiceImpl implements AuthService {
 
     private LoginResponse buildLoginResponse(CustomUserPrincipal principal) {
         return LoginResponse.builder()
-                .accessToken(jwtService.generateToken(principal))
+                .accessToken(jwtService.generateAccessToken(principal))
+                .refreshToken(jwtService.generateRefreshToken(principal))
                 .tokenType("Bearer")
                 .role(principal.getRole())
                 .displayName(principal.getDisplayName())
                 .professionalId(principal.getProfessionalId())
                 .build();
+    }
+
+    @Override
+    public LoginResponse refresh(String refreshToken) {
+        CustomUserPrincipal principal = jwtService.extractRefreshPrincipal(refreshToken);
+        return buildLoginResponse(principal);
     }
 }

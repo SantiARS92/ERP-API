@@ -1,5 +1,6 @@
 package es.pedro.pymes_backend.infrastructure.web.exception;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
         return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(JwtException.class)
+    public ResponseEntity<Map<String, Object>> handleJwt(JwtException ex) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Token invalido o expirado");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

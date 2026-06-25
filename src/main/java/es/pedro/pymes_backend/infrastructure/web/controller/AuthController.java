@@ -5,6 +5,7 @@ import es.pedro.pymes_backend.infrastructure.security.CustomUserPrincipal;
 import es.pedro.pymes_backend.infrastructure.web.dto.AuthMeResponse;
 import es.pedro.pymes_backend.infrastructure.web.dto.LoginRequest;
 import es.pedro.pymes_backend.infrastructure.web.dto.LoginResponse;
+import es.pedro.pymes_backend.infrastructure.web.dto.RefreshTokenRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,6 +30,11 @@ public class AuthController {
     @PostMapping("/guest")
     public LoginResponse guest() {
         return authService.loginAsGuest();
+    }
+
+    @PostMapping("/refresh")
+    public LoginResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return authService.refresh(request.getRefreshToken());
     }
 
     @GetMapping("/me")

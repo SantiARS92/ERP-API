@@ -11,5 +11,7 @@ public interface AuthService {
 
     LoginResponse loginAsGuest();
 
+    LoginResponse refresh(String refreshToken);
+
     AuthMeResponse getAuthenticatedUser(CustomUserPrincipal principal);
 }

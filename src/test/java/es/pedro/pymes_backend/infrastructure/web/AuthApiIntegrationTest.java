@@ -11,9 +11,14 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.jayway.jsonpath.JsonPath;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -49,6 +54,7 @@ class AuthApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.role").value("ADMIN"))
                 .andExpect(jsonPath("$.displayName").value("Administrador"))
@@ -85,6 +91,7 @@ class AuthApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.role").value("PROFESSIONAL"))
                 .andExpect(jsonPath("$.displayName").value("Ana Garcia"))
@@ -147,6 +154,7 @@ class AuthApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
         mockMvc.perform(post("/api/auth/guest"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.role").value("GUEST"))
                 .andExpect(jsonPath("$.displayName").value("Invitado"))
@@ -185,6 +193,163 @@ class AuthApiIntegrationTest extends AuthenticatedApiIntegrationTestSupport {
                 .andExpect(jsonPath("$.role").value("PROFESSIONAL"))
                 .andExpect(jsonPath("$.displayName").value("Clara Perfil"))
                 .andExpect(jsonPath("$.professionalId").value(professional.getId().intValue()));
+    }
+
+    @Test
+    void refreshShouldReturnNewTokensForAdmin() throws Exception {
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "admin",
+                                  "password": "1234"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String refreshToken = JsonPath.read(loginResponse, "$.refreshToken");
+        String originalAccessToken = JsonPath.read(loginResponse, "$.accessToken");
+
+        MvcResult refreshResult = mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "refreshToken": "%s"
+                                }
+                                """.formatted(refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.displayName").value("Administrador"))
+                .andExpect(jsonPath("$.professionalId").value(nullValue()))
+                .andReturn();
+
+        String newAccessToken = JsonPath.read(refreshResult.getResponse().getContentAsString(), "$.accessToken");
+        String newRefreshToken = JsonPath.read(refreshResult.getResponse().getContentAsString(), "$.refreshToken");
+
+        assertNotEquals("El refresh debe devolver un nuevo access token", originalAccessToken, newAccessToken);
+        assertNotNull("Debe emitir un nuevo refresh token", newRefreshToken);
+    }
+
+    @Test
+    void refreshShouldReturnNewTokensForProfessional() throws Exception {
+        saveProfessional("Pedro Renovado", "clave-refresh", true);
+
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "Pedro Renovado",
+                                  "password": "clave-refresh"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String refreshToken = JsonPath.read(loginResponse, "$.refreshToken");
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "refreshToken": "%s"
+                                }
+                                """.formatted(refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.role").value("PROFESSIONAL"))
+                .andExpect(jsonPath("$.displayName").value("Pedro Renovado"))
+                .andExpect(jsonPath("$.professionalId").value(notNullValue()));
+    }
+
+    @Test
+    void refreshShouldReturnNewTokensForGuest() throws Exception {
+        String guestResponse = mockMvc.perform(post("/api/auth/guest"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String refreshToken = JsonPath.read(guestResponse, "$.refreshToken");
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "refreshToken": "%s"
+                                }
+                                """.formatted(refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.role").value("GUEST"))
+                .andExpect(jsonPath("$.displayName").value("Invitado"))
+                .andExpect(jsonPath("$.professionalId").value(nullValue()));
+    }
+
+    @Test
+    void refreshShouldRejectInvalidToken() throws Exception {
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "refreshToken": "token-manualmente-invalido"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").value("Token invalido o expirado"));
+    }
+
+    @Test
+    void refreshShouldRejectAccessTokenUsedAsRefreshToken() throws Exception {
+        String adminToken = issueAdminToken();
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "refreshToken": "%s"
+                                }
+                                """.formatted(adminToken)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
+    }
+
+    @Test
+    void protectedEndpointsShouldRejectRefreshTokenUsedAsAccessToken() throws Exception {
+        String loginResponse = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "admin",
+                                  "password": "1234"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String refreshToken = JsonPath.read(loginResponse, "$.refreshToken");
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + refreshToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
     }
 
     @Test

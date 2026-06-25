@@ -15,18 +15,32 @@ import java.util.Date;
 @Service
 public class JwtService {
 
+    private static final String TOKEN_TYPE_ACCESS = "ACCESS";
+    private static final String TOKEN_TYPE_REFRESH = "REFRESH";
+
     private final SecretKey signingKey;
-    private final long expirationMs;
+    private final long accessExpirationMs;
+    private final long refreshExpirationMs;
 
     public JwtService(
             @Value("${app.auth.jwt.secret}") String secret,
-            @Value("${app.auth.jwt.expiration-ms}") long expirationMs
+            @Value("${app.auth.jwt.expiration-ms}") long accessExpirationMs,
+            @Value("${app.auth.jwt.refresh-expiration-ms}") long refreshExpirationMs
     ) {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMs = expirationMs;
+        this.accessExpirationMs = accessExpirationMs;
+        this.refreshExpirationMs = refreshExpirationMs;
     }
 
-    public String generateToken(CustomUserPrincipal principal) {
+    public String generateAccessToken(CustomUserPrincipal principal) {
+        return buildToken(principal, accessExpirationMs, TOKEN_TYPE_ACCESS);
+    }
+
+    public String generateRefreshToken(CustomUserPrincipal principal) {
+        return buildToken(principal, refreshExpirationMs, TOKEN_TYPE_REFRESH);
+    }
+
+    private String buildToken(CustomUserPrincipal principal, long expiration, String tokenType) {
         Instant now = Instant.now();
 
         return Jwts.builder()
@@ -34,15 +48,33 @@ public class JwtService {
                 .claim("role", principal.getRole())
                 .claim("displayName", principal.getDisplayName())
                 .claim("professionalId", principal.getProfessionalId())
+                .claim("tokenType", tokenType)
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusMillis(expirationMs)))
+                .expiration(Date.from(now.plusMillis(expiration)))
                 .signWith(signingKey)
                 .compact();
     }
 
-    public CustomUserPrincipal extractPrincipal(String token) {
+    public CustomUserPrincipal extractAccessPrincipal(String token) {
         Claims claims = extractAllClaims(token);
+        validateTokenType(claims, TOKEN_TYPE_ACCESS);
+        return buildPrincipal(claims);
+    }
 
+    public CustomUserPrincipal extractRefreshPrincipal(String token) {
+        Claims claims = extractAllClaims(token);
+        validateTokenType(claims, TOKEN_TYPE_REFRESH);
+        return buildPrincipal(claims);
+    }
+
+    private void validateTokenType(Claims claims, String expectedType) {
+        String tokenType = claims.get("tokenType", String.class);
+        if (!expectedType.equals(tokenType)) {
+            throw new JwtException("Tipo de token invalido");
+        }
+    }
+
+    private CustomUserPrincipal buildPrincipal(Claims claims) {
         String username = claims.getSubject();
         String role = claims.get("role", String.class);
         String displayName = claims.get("displayName", String.class);

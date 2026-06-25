@@ -60,7 +60,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/guest").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/guest", "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").hasAnyRole(ADMIN_ROLE, PROFESSIONAL_ROLE, GUEST_ROLE)
 
                         .requestMatchers(HttpMethod.GET, "/api/appointments").hasAnyRole(ADMIN_ROLE, PROFESSIONAL_ROLE, GUEST_ROLE)
