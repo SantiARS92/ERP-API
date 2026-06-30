@@ -165,6 +165,18 @@ Entre las configuraciones relevantes del proyecto se encuentran:
 
 Para entorno de test se utiliza H2 en memoria con compatibilidad orientada a PostgreSQL.
 
+### Scripts manuales de base de datos
+
+La carpeta `src/main/resources/db/manual/` contiene scripts SQL para cambios de esquema que `spring.jpa.hibernate.ddl-auto=update` no gestiona automáticamente (secuencias nativas, índices, alteraciones puntuales de columnas, etc.). Estos scripts **no se ejecutan solos** al arrancar la aplicación: hay que aplicarlos manualmente contra cada base de datos (local, staging, producción) después de hacer `git pull` si el cambio los incluye.
+
+Ejemplo de ejecución con `psql`:
+
+```bash
+psql -h <host> -p <puerto> -U <usuario> -d <base_de_datos> -f src/main/resources/db/manual/<archivo>.sql
+```
+
+Todos los scripts de esta carpeta están escritos para ser idempotentes (usan `if not exists` o equivalente), por lo que pueden ejecutarse varias veces sin causar errores.
+
 ## Ejecución del proyecto
 
 El proyecto puede ejecutarse con Maven Wrapper desde la raíz del repositorio.
