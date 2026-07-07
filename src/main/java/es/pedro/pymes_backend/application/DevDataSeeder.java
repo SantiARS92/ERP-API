@@ -1270,16 +1270,16 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private static List<CategorySeed> buildCategorySeeds() {
         return List.of(
-                new CategorySeed("Corte y Peinado", "rose", "scissors"),
+                new CategorySeed("Corte y Peinado", "rose", "content_cut"),
                 new CategorySeed("Coloracion", "amber", "palette"),
                 new CategorySeed("Barberia", "slate", "shield"),
-                new CategorySeed("Unas", "pink", "sparkles"),
-                new CategorySeed("Estetica Facial", "emerald", "flower"),
-                new CategorySeed("Depilacion", "sand", "sun"),
-                new CategorySeed("Masajes y Bienestar", "teal", "leaf"),
-                new CategorySeed("Tratamientos Capilares", "cyan", "droplets"),
+                new CategorySeed("Unas", "pink", "auto_awesome"),
+                new CategorySeed("Estetica Facial", "emerald", "local_florist"),
+                new CategorySeed("Depilacion", "sand", "wb_sunny"),
+                new CategorySeed("Masajes y Bienestar", "teal", "spa"),
+                new CategorySeed("Tratamientos Capilares", "cyan", "water_drop"),
                 new CategorySeed("Maquillaje", "red", "brush"),
-                new CategorySeed("Retail Profesional", "indigo", "shopping-bag")
+                new CategorySeed("Retail Profesional", "indigo", "shopping_bag")
         );
     }
 
