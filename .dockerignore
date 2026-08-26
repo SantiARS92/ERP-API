@@ -7,8 +7,5 @@ target
 Dockerfile
 docker-compose*.yml
 graphify-out
-.mvn
-mvnw
-mvnw.cmd
 local-dev
 src/test
