@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb-${random.uuid};MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+server:
+  port: 0
+
+app:
+  cors:
+    allowed-origins: http://localhost:4200,http://localhost:6200
+  auth:
+    admin:
+      username: admin
+      password: "1234"
+    jwt:
+      secret: CAMBIAR_ESTA_CLAVE_POR_UNA_LARGA_Y_SEGURA_12345678901234567890
+      expiration-ms: 28800000
+      refresh-expiration-ms: 604800000

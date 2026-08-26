@@ -1,0 +1,31 @@
+services:
+  app:
+    build: .
+    container_name: pymes-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    environment:
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_PORT=${DB_PORT}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - APP_AUTH_ADMIN_USERNAME=${APP_AUTH_ADMIN_USERNAME}
+      - APP_AUTH_ADMIN_PASSWORD=${APP_AUTH_ADMIN_PASSWORD}
+      - APP_AUTH_JWT_SECRET=${APP_AUTH_JWT_SECRET}
+      - APP_AUTH_JWT_EXPIRATION_MS=${APP_AUTH_JWT_EXPIRATION_MS}
+      - APP_AUTH_JWT_REFRESH_EXPIRATION_MS=${APP_AUTH_JWT_REFRESH_EXPIRATION_MS}
+      - APP_SEED_DEMO_DATA=${APP_SEED_DEMO_DATA}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M

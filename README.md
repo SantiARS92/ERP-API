@@ -163,6 +163,20 @@ Entre las configuraciones relevantes del proyecto se encuentran:
 - secreto y expiración del JWT
 - activación opcional de seed de datos demo
 
+Para arrancar rápido en local puedes copiar `.env.local.example` a `.env.local` y ajustar los valores que necesites. Las variables más útiles son:
+
+- `DB_URL`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+- `PORT`
+- `CORS_ALLOWED_ORIGINS`
+- `APP_AUTH_ADMIN_USERNAME`
+- `APP_AUTH_ADMIN_PASSWORD`
+- `APP_AUTH_JWT_SECRET`
+- `APP_AUTH_JWT_EXPIRATION_MS`
+- `APP_AUTH_JWT_REFRESH_EXPIRATION_MS`
+- `APP_SEED_DEMO_DATA`
+
 Para entorno de test se utiliza H2 en memoria con compatibilidad orientada a PostgreSQL.
 
 ### Scripts manuales de base de datos

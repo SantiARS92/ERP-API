@@ -6,7 +6,7 @@ Single-module Maven project. No monorepo.
 ## Commands
 
 ```bash
-./mvnw spring-boot:run          # Run app (port 8091 by default)
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev  # Run app locally (dev profile, port 8091)
 ./mvnw test                     # All tests (H2 in-memory, no DB needed)
 ./mvnw test -Dtest=ClassName    # Single test class
 ./mvnw test -Dtest=ClassName#methodName  # Single test method
@@ -37,8 +37,9 @@ Credentials: `postgres` / `123456P`, DB: `pymes_app`.
 
 ## Profiles
 
-- Default profile: `prod` (PostgreSQL, port 8091).
-- Tests use `test` profile automatically (`@ActiveProfiles("test")`) — H2 in-memory with `MODE=PostgreSQL`, `ddl-auto=create-drop`.
+- Default profile: `prod` (PostgreSQL, port 8091) — config in `src/main/resources/application.yml`.
+- Local dev: activate the `dev` profile (`./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`) — config in `src/main/resources/application-dev.yml` (localhost PostgreSQL, show-sql on, demo data seeded).
+- Tests use `test` profile automatically (`@ActiveProfiles("test")`) — H2 in-memory with `MODE=PostgreSQL`, `ddl-auto=create-drop`, config in `src/test/resources/application-test.yml`.
 
 ## Key environment variables
 
