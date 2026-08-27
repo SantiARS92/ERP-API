@@ -7,6 +7,7 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5436/pymes_app}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:123456P}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
