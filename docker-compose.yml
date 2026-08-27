@@ -1,7 +1,7 @@
 services:
-  app:
+  autonomos-api:
     build: .
-    container_name: pymes-api
+    container_name: autonomos-api
     restart: unless-stopped
     ports:
       - "${API_PORT}:8080"
