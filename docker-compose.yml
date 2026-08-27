@@ -30,9 +30,3 @@ services:
       - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE}
       - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS}
       - API_PORT=${API_PORT}
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
