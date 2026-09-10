@@ -36,5 +36,6 @@ public interface AppointmentRepository extends JpaRepository<AppointmentEntity, 
             LocalDate fromDate,
             LocalDate toDate
     );
+    boolean existsByProfessionalId(Long professionalId);
 
 }
