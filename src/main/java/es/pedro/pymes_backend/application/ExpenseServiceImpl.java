@@ -166,8 +166,6 @@ public class ExpenseServiceImpl implements ExpenseService {
     public void deleteExpense(Long id) {
         ExpenseEntity expense = getExpenseEntityById(id);
 
-        revertInventorySyncIfNeeded(expense);
-
         expenseRepository.delete(expense);
     }
 
