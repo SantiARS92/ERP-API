@@ -7,6 +7,7 @@ import es.pedro.pymes_backend.infrastructure.web.dto.ProfessionalResponse;
 import es.pedro.pymes_backend.infrastructure.web.exception.BadRequestException;
 import es.pedro.pymes_backend.infrastructure.web.exception.ConflictException;
 import es.pedro.pymes_backend.infrastructure.web.exception.ResourceNotFoundException;
+import es.pedro.pymes_backend.infrastructure.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ public class ProfessionalService {
 
     private final ProfessionalRepository professionalRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AppointmentRepository appointmentRepository;
 
     @Transactional(readOnly = true)
     public List<ProfessionalResponse> getAll(Boolean active) {
@@ -60,6 +62,17 @@ public class ProfessionalService {
 
         ProfessionalEntity saved = professionalRepository.save(professional);
         return mapToResponse(saved);
+    }
+
+    public void delete(Long id) {
+        ProfessionalEntity professional = professionalRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Profesional no encontrado con id: " + id));
+
+        if (appointmentRepository.existsByProfessionalId(id)) {
+            throw new ConflictException("No se puede eliminar el profesional porque tiene citas asociadas");
+        }
+
+        professionalRepository.delete(professional);
     }
 
     private void applyRequest(ProfessionalEntity entity, ProfessionalRequest request) {
@@ -126,4 +139,5 @@ public class ProfessionalService {
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
+
 }
