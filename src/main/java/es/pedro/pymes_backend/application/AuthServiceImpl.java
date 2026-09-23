@@ -61,7 +61,7 @@ public class AuthServiceImpl implements AuthService {
             return buildLoginResponse(principal);
         }
 
-        ProfessionalEntity professional = professionalRepository.findByNormalizedFullName(normalizedUsername)
+        ProfessionalEntity professional = professionalRepository.findByNormalizedEmail(normalizedUsername)
                 .filter(foundProfessional -> Boolean.TRUE.equals(foundProfessional.getActive()))
                 .filter(foundProfessional -> StringUtils.hasText(foundProfessional.getPasswordHash()))
                 .filter(foundProfessional -> passwordEncoder.matches(request.getPassword(), foundProfessional.getPasswordHash()))

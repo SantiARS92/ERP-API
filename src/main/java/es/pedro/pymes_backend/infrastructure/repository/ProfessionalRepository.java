@@ -22,4 +22,11 @@ public interface ProfessionalRepository extends JpaRepository<ProfessionalEntity
             where lower(trim(p.fullName)) = lower(trim(:fullName))
             """)
     Optional<ProfessionalEntity> findByNormalizedFullName(@Param("fullName") String fullName);
+
+    @Query ("""
+            select p
+            from ProfessionalEntity p
+            where lower(trim(p.email)) = lower(trim(:email))
+            """)
+    Optional<ProfessionalEntity> findByNormalizedEmail(@Param("email") String email);
 }
