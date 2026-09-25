@@ -14,6 +14,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import es.pedro.pymes_backend.infrastructure.repository.SaleRepository;
+import es.pedro.pymes_backend.infrastructure.web.exception.ConflictException;
 
 @Service
 @Transactional
@@ -21,7 +23,7 @@ import org.springframework.util.StringUtils;
 public class ClientService {
 
     private final ClientRepository clientRepository;
-
+    private final SaleRepository saleRepository;
     public PagedResponse<ClientResponse> getAllClients(String search, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
 
@@ -72,6 +74,9 @@ public class ClientService {
         ClientEntity client = clientRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado con id: " + id));
 
+        if (saleRepository.existsByClientId(id)) {
+            throw new ConflictException("No se puede eliminar el cliente porque tiene ventas asociadas.");
+        }
         clientRepository.delete(client);
     }
 

@@ -12,6 +12,7 @@ public interface SaleRepository extends JpaRepository<SaleEntity, Long>, JpaSpec
 
     boolean existsByAppointmentId(Long appointmentId);
     boolean existsByServiceId(Long serviceId);
+    boolean existsByClientId(Long clientId);
 
     Optional<SaleEntity> findByAppointmentId(Long appointmentId);
 
