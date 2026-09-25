@@ -14,6 +14,8 @@ import es.pedro.pymes_backend.infrastructure.web.dto.PagedResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import es.pedro.pymes_backend.infrastructure.repository.SaleRepository;
+import es.pedro.pymes_backend.infrastructure.web.exception.ConflictException;
 
 import java.util.List;
 
@@ -21,113 +23,123 @@ import java.util.List;
 @Transactional
 public class ServiceService {
 
-    private final ServiceRepository repository;
-    private final CategoryRepository categoryRepository;
+        private final ServiceRepository repository;
+        private final CategoryRepository categoryRepository;
+        private final SaleRepository saleRepository;
 
-    public ServiceService(ServiceRepository repository, CategoryRepository categoryRepository) {
-        this.repository = repository;
-        this.categoryRepository = categoryRepository;
-    }
+        public ServiceService(ServiceRepository repository, CategoryRepository categoryRepository,
+                        SaleRepository saleRepository) {
+                this.repository = repository;
+                this.categoryRepository = categoryRepository;
+                this.saleRepository = saleRepository;
+        }
 
-    public PagedResponse<ServiceResponse> getAll(
-            String search,
-            Boolean active,
-            Long categoryId,
-            Double minPrice,
-            Double maxPrice,
-            int page,
-            int size
-    ) {
-        Specification<ServiceEntity> specification = Specification
-                .where(ServiceSpecification.hasSearch(search))
-                .and(ServiceSpecification.hasActive(active))
-                .and(ServiceSpecification.hasCategoryId(categoryId))
-                .and(ServiceSpecification.hasMinPrice(minPrice))
-                .and(ServiceSpecification.hasMaxPrice(maxPrice));
+        public PagedResponse<ServiceResponse> getAll(
+                        String search,
+                        Boolean active,
+                        Long categoryId,
+                        Double minPrice,
+                        Double maxPrice,
+                        int page,
+                        int size) {
+                Specification<ServiceEntity> specification = Specification
+                                .where(ServiceSpecification.hasSearch(search))
+                                .and(ServiceSpecification.hasActive(active))
+                                .and(ServiceSpecification.hasCategoryId(categoryId))
+                                .and(ServiceSpecification.hasMinPrice(minPrice))
+                                .and(ServiceSpecification.hasMaxPrice(maxPrice));
 
-        Pageable pageable = PageRequest.of(page, size);
+                Pageable pageable = PageRequest.of(page, size);
 
-        Page<ServiceEntity> resultPage = repository.findAll(specification, pageable);
+                Page<ServiceEntity> resultPage = repository.findAll(specification, pageable);
 
-        List<ServiceResponse> content = resultPage.getContent()
-                .stream()
-                .map(this::toResponse)
-                .toList();
+                List<ServiceResponse> content = resultPage.getContent()
+                                .stream()
+                                .map(this::toResponse)
+                                .toList();
 
-        return PagedResponse.<ServiceResponse>builder()
-                .content(content)
-                .page(resultPage.getNumber())
-                .size(resultPage.getSize())
-                .totalElements(resultPage.getTotalElements())
-                .totalPages(resultPage.getTotalPages())
-                .first(resultPage.isFirst())
-                .last(resultPage.isLast())
-                .build();
-    }
+                return PagedResponse.<ServiceResponse>builder()
+                                .content(content)
+                                .page(resultPage.getNumber())
+                                .size(resultPage.getSize())
+                                .totalElements(resultPage.getTotalElements())
+                                .totalPages(resultPage.getTotalPages())
+                                .first(resultPage.isFirst())
+                                .last(resultPage.isLast())
+                                .build();
+        }
 
-    public ServiceResponse getById(Long id) {
-        ServiceEntity service = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
+        public ServiceResponse getById(Long id) {
+                ServiceEntity service = repository.findById(id)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Servicio no encontrado con id: " + id));
 
-        return toResponse(service);
-    }
+                return toResponse(service);
+        }
 
-    public ServiceResponse create(ServiceRequest request) {
-        CategoryEntity category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con id: " + request.getCategoryId()));
+        public ServiceResponse create(ServiceRequest request) {
+                CategoryEntity category = categoryRepository.findById(request.getCategoryId())
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Categoría no encontrada con id: " + request.getCategoryId()));
 
-        ServiceEntity service = new ServiceEntity();
-        mapRequestToEntity(request, service, category);
+                ServiceEntity service = new ServiceEntity();
+                mapRequestToEntity(request, service, category);
 
-        ServiceEntity saved = repository.save(service);
-        return toResponse(saved);
-    }
+                ServiceEntity saved = repository.save(service);
+                return toResponse(saved);
+        }
 
-    public ServiceResponse update(Long id, ServiceRequest request) {
-        ServiceEntity service = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
+        public ServiceResponse update(Long id, ServiceRequest request) {
+                ServiceEntity service = repository.findById(id)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Servicio no encontrado con id: " + id));
 
-        CategoryEntity category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con id: " + request.getCategoryId()));
+                CategoryEntity category = categoryRepository.findById(request.getCategoryId())
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Categoría no encontrada con id: " + request.getCategoryId()));
 
-        mapRequestToEntity(request, service, category);
+                mapRequestToEntity(request, service, category);
 
-        ServiceEntity updated = repository.save(service);
-        return toResponse(updated);
-    }
+                ServiceEntity updated = repository.save(service);
+                return toResponse(updated);
+        }
 
-    public void delete(Long id) {
-        ServiceEntity service = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Servicio no encontrado con id: " + id));
+        public void delete(Long id) {
+                ServiceEntity service = repository.findById(id)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Servicio no encontrado con id: " + id));
 
-        repository.delete(service);
-    }
+                if (saleRepository.existsByServiceId(id)) {
+                        throw new ConflictException("No se puede eliminar el servicio con id: " + id
+                                        + " porque tiene ventas asociadas.");
+                }
+                repository.delete(service);
+        }
 
-    private void mapRequestToEntity(ServiceRequest request, ServiceEntity service, CategoryEntity category) {
-        service.setName(request.getName());
-        service.setDescription(request.getDescription());
-        service.setDurationMinutes(request.getDurationMinutes());
-        service.setPrice(request.getPrice());
-        service.setActive(request.getActive());
-        service.setCategory(category);
-    }
+        private void mapRequestToEntity(ServiceRequest request, ServiceEntity service, CategoryEntity category) {
+                service.setName(request.getName());
+                service.setDescription(request.getDescription());
+                service.setDurationMinutes(request.getDurationMinutes());
+                service.setPrice(request.getPrice());
+                service.setActive(request.getActive());
+                service.setCategory(category);
+        }
 
-    private ServiceResponse toResponse(ServiceEntity service) {
-        return ServiceResponse.builder()
-                .id(service.getId())
-                .name(service.getName())
-                .description(service.getDescription())
-                .durationMinutes(service.getDurationMinutes())
-                .price(service.getPrice())
-                .active(service.getActive())
-                .category(
-                        CategorySummaryResponse.builder()
-                                .id(service.getCategory().getId())
-                                .name(service.getCategory().getName())
-                                .color(service.getCategory().getColor())
-                                .icon(service.getCategory().getIcon())
-                                .build()
-                )
-                .build();
-    }
+        private ServiceResponse toResponse(ServiceEntity service) {
+                return ServiceResponse.builder()
+                                .id(service.getId())
+                                .name(service.getName())
+                                .description(service.getDescription())
+                                .durationMinutes(service.getDurationMinutes())
+                                .price(service.getPrice())
+                                .active(service.getActive())
+                                .category(
+                                                CategorySummaryResponse.builder()
+                                                                .id(service.getCategory().getId())
+                                                                .name(service.getCategory().getName())
+                                                                .color(service.getCategory().getColor())
+                                                                .icon(service.getCategory().getIcon())
+                                                                .build())
+                                .build();
+        }
 }
