@@ -11,6 +11,7 @@ import java.util.Optional;
 public interface SaleRepository extends JpaRepository<SaleEntity, Long>, JpaSpecificationExecutor<SaleEntity> {
 
     boolean existsByAppointmentId(Long appointmentId);
+    boolean existsByServiceId(Long serviceId);
 
     Optional<SaleEntity> findByAppointmentId(Long appointmentId);
 
