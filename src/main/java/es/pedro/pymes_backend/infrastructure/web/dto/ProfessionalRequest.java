@@ -26,6 +26,7 @@ public class ProfessionalRequest {
     @Size(max = 30, message = "El teléfono no puede superar los 30 caracteres")
     private String phone;
 
+    @NotBlank (message = "El email es obligatorio")
     @Email(message = "El email no es válido")
     @Size(max = 150, message = "El email no puede superar los 150 caracteres")
     private String email;

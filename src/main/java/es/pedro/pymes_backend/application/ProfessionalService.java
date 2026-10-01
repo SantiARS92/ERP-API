@@ -79,11 +79,12 @@ public class ProfessionalService {
         String normalizedFullName = request.getFullName().trim();
         validateFullNameUniqueness(normalizedFullName, entity.getId());
         validateReservedFullName(normalizedFullName);
+        validateEmailUniqueness(request.getEmail().trim(), entity.getId());
 
         entity.setFullName(normalizedFullName);
         entity.setSpecialty(request.getSpecialty().trim());
         entity.setPhone(blankToNull(request.getPhone()));
-        entity.setEmail(blankToNull(request.getEmail()));
+        entity.setEmail(request.getEmail().trim());
         entity.setActive(request.getActive());
     }
 
@@ -104,6 +105,15 @@ public class ProfessionalService {
                 .ifPresent(existingProfessional -> {
                     if (currentId == null || !existingProfessional.getId().equals(currentId)) {
                         throw new ConflictException("Ya existe un profesional con ese nombre completo");
+                    }
+                });
+    }
+
+    private void validateEmailUniqueness(String email, Long currentId) {
+        professionalRepository.findByNormalizedEmail(email)
+                .ifPresent(existingProfessional -> {
+                    if (currentId == null || !existingProfessional.getId().equals(currentId)) {
+                        throw new ConflictException("Ya existe un profesional con ese email");
                     }
                 });
     }
