@@ -39,181 +39,172 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 class DevDataSeederIntegrationTest {
 
-        private static final LocalDate START_DATE = LocalDate.of(2024, 1, 1);
-        private static final LocalDate END_DATE = LocalDate.of(2027, 12, 31);
+    private static final LocalDate START_DATE = LocalDate.of(2024, 1, 1);
+    private static final LocalDate END_DATE = LocalDate.of(2027, 12, 31);
 
-        @Autowired
-        private DevDataSeeder devDataSeeder;
+    @Autowired
+    private DevDataSeeder devDataSeeder;
 
-        @Autowired
-        private CategoryRepository categoryRepository;
+    @Autowired
+    private CategoryRepository categoryRepository;
 
-        @Autowired
-        private ServiceRepository serviceRepository;
+    @Autowired
+    private ServiceRepository serviceRepository;
 
-        @Autowired
-        private ClientRepository clientRepository;
+    @Autowired
+    private ClientRepository clientRepository;
 
-        @Autowired
-        private ProfessionalRepository professionalRepository;
+    @Autowired
+    private ProfessionalRepository professionalRepository;
 
-        @Autowired
-        private InventoryProductRepository inventoryProductRepository;
+    @Autowired
+    private InventoryProductRepository inventoryProductRepository;
 
-        @Autowired
-        private InventoryProductVariantRepository inventoryProductVariantRepository;
+    @Autowired
+    private InventoryProductVariantRepository inventoryProductVariantRepository;
 
-        @Autowired
-        private ExpenseRepository expenseRepository;
+    @Autowired
+    private ExpenseRepository expenseRepository;
 
-        @Autowired
-        private AppointmentRepository appointmentRepository;
+    @Autowired
+    private AppointmentRepository appointmentRepository;
 
-        @Autowired
-        private SaleRepository saleRepository;
+    @Autowired
+    private SaleRepository saleRepository;
 
-        @Test
-        void shouldSeedExtendedDemoDataOnceAndSkipRepeatedExecution() {
-                List<AppointmentEntity> appointments = appointmentRepository.findAll();
-                List<SaleEntity> sales = saleRepository.findAll();
-                List<ExpenseEntity> expenses = expenseRepository.findAll();
+    @Test
+    void shouldSeedExtendedDemoDataOnceAndSkipRepeatedExecution() {
+        List<AppointmentEntity> appointments = appointmentRepository.findAll();
+        List<SaleEntity> sales = saleRepository.findAll();
+        List<ExpenseEntity> expenses = expenseRepository.findAll();
 
-                assertThat(categoryRepository.count()).isEqualTo(10);
-                assertThat(serviceRepository.count()).isEqualTo(40);
-                assertThat(clientRepository.count()).isEqualTo(360);
-                assertThat(professionalRepository.count()).isEqualTo(7);
-                assertThat(inventoryProductRepository.count()).isZero();
-                assertThat(inventoryProductVariantRepository.count()).isZero();
-                assertThat(expenseRepository.count()).isGreaterThanOrEqualTo(300);
-                assertThat(appointmentRepository.count()).isGreaterThanOrEqualTo(2000);
-                assertThat(saleRepository.count()).isGreaterThanOrEqualTo(1800);
+        assertThat(categoryRepository.count()).isEqualTo(10);
+        assertThat(serviceRepository.count()).isEqualTo(40);
+        assertThat(clientRepository.count()).isEqualTo(360);
+        assertThat(professionalRepository.count()).isEqualTo(7);
+        assertThat(inventoryProductRepository.count()).isZero();
+        assertThat(inventoryProductVariantRepository.count()).isZero();
+        assertThat(expenseRepository.count()).isGreaterThanOrEqualTo(300);
+        assertThat(appointmentRepository.count()).isGreaterThanOrEqualTo(2000);
+        assertThat(saleRepository.count()).isGreaterThanOrEqualTo(1800);
 
-                assertThat(clientRepository.findByFullNameIgnoreCase("Al contado"))
-                                .isPresent()
-                                .get()
-                                .satisfies(client -> {
-                                        assertThat(client.getPhone()).isEmpty();
-                                        assertThat(client.getEmail()).isNull();
-                                        assertThat(client.getAcceptsInvoices()).isFalse();
-                                        assertThat(client.getAddress()).isNull();
-                                        assertThat(client.getCifNif()).isNull();
-                                        assertThat(client.getIdentificador()).isNull();
-                                });
+        assertThat(clientRepository.findByFullNameIgnoreCase("Al contado"))
+                .isPresent()
+                .get()
+                .satisfies(client -> {
+                    assertThat(client.getPhone()).isEmpty();
+                    assertThat(client.getEmail()).isNull();
+                    assertThat(client.getAcceptsInvoices()).isFalse();
+                    assertThat(client.getAddress()).isNull();
+                    assertThat(client.getCifNif()).isNull();
+                    assertThat(client.getIdentificador()).isNull();
+                });
 
-                assertThat(professionalRepository.findByActiveOrderByFullNameAsc(true)).hasSize(6);
-                assertThat(appointments.stream().map(AppointmentEntity::getStatus))
-                                .contains(AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED,
-                                                AppointmentStatus.CANCELLED);
-                assertThat(sales.stream().map(SaleEntity::getSourceType))
-                                .contains(SaleSourceType.MANUAL, SaleSourceType.APPOINTMENT);
+        assertThat(professionalRepository.findByActiveOrderByFullNameAsc(true)).hasSize(6);
+        assertThat(appointments.stream().map(AppointmentEntity::getStatus))
+                .contains(AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED);
+        assertThat(sales.stream().map(SaleEntity::getSourceType))
+                .contains(SaleSourceType.MANUAL, SaleSourceType.APPOINTMENT);
 
-                assertDailyAppointmentCoverage(appointments);
-                assertThat(sales).noneMatch(sale -> sale.getItemType() == SaleItemType.PRODUCT);
-                assertThat(expenses).noneMatch(expense -> expense.getInventoryProduct() != null);
-                assertEconomicDiversity(sales, expenses);
+        assertDailyAppointmentCoverage(appointments);
+        assertThat(sales).noneMatch(sale -> sale.getItemType() == SaleItemType.PRODUCT);
+        assertThat(expenses).noneMatch(expense -> expense.getInventoryProduct() != null);
+        assertEconomicDiversity(sales, expenses);
 
-                long categoryCount = categoryRepository.count();
-                long serviceCount = serviceRepository.count();
-                long clientCount = clientRepository.count();
-                long professionalCount = professionalRepository.count();
-                long inventoryCount = inventoryProductRepository.count();
-                long variantCount = inventoryProductVariantRepository.count();
-                long expenseCount = expenseRepository.count();
-                long appointmentCount = appointmentRepository.count();
-                long saleCount = saleRepository.count();
+        long categoryCount = categoryRepository.count();
+        long serviceCount = serviceRepository.count();
+        long clientCount = clientRepository.count();
+        long professionalCount = professionalRepository.count();
+        long inventoryCount = inventoryProductRepository.count();
+        long variantCount = inventoryProductVariantRepository.count();
+        long expenseCount = expenseRepository.count();
+        long appointmentCount = appointmentRepository.count();
+        long saleCount = saleRepository.count();
 
-                devDataSeeder.run(new DefaultApplicationArguments(new String[0]));
+        devDataSeeder.run(new DefaultApplicationArguments(new String[0]));
 
-                assertThat(categoryRepository.count()).isEqualTo(categoryCount);
-                assertThat(serviceRepository.count()).isEqualTo(serviceCount);
-                assertThat(clientRepository.count()).isEqualTo(clientCount);
-                assertThat(professionalRepository.count()).isEqualTo(professionalCount);
-                assertThat(inventoryProductRepository.count()).isEqualTo(inventoryCount);
-                assertThat(inventoryProductVariantRepository.count()).isEqualTo(variantCount);
-                assertThat(expenseRepository.count()).isEqualTo(expenseCount);
-                assertThat(appointmentRepository.count()).isEqualTo(appointmentCount);
-                assertThat(saleRepository.count()).isEqualTo(saleCount);
+        assertThat(categoryRepository.count()).isEqualTo(categoryCount);
+        assertThat(serviceRepository.count()).isEqualTo(serviceCount);
+        assertThat(clientRepository.count()).isEqualTo(clientCount);
+        assertThat(professionalRepository.count()).isEqualTo(professionalCount);
+        assertThat(inventoryProductRepository.count()).isEqualTo(inventoryCount);
+        assertThat(inventoryProductVariantRepository.count()).isEqualTo(variantCount);
+        assertThat(expenseRepository.count()).isEqualTo(expenseCount);
+        assertThat(appointmentRepository.count()).isEqualTo(appointmentCount);
+        assertThat(saleRepository.count()).isEqualTo(saleCount);
+    }
+
+    private void assertDailyAppointmentCoverage(List<AppointmentEntity> appointments) {
+        Map<LocalDate, Long> appointmentsByDate = appointments.stream()
+                .collect(Collectors.groupingBy(AppointmentEntity::getAppointmentDate, Collectors.counting()));
+
+        LocalDate date = START_DATE;
+        while (!date.isAfter(END_DATE)) {
+            assertThat(appointmentsByDate.getOrDefault(date, 0L))
+                    .withFailMessage("Falta cobertura de citas para %s", date)
+                    .isGreaterThanOrEqualTo(1L);
+            date = date.plusDays(1);
         }
+    }
 
-        private void assertDailyAppointmentCoverage(List<AppointmentEntity> appointments) {
-                Map<LocalDate, Long> appointmentsByDate = appointments.stream()
-                                .collect(Collectors.groupingBy(AppointmentEntity::getAppointmentDate,
-                                                Collectors.counting()));
+    private void assertEconomicDiversity(List<SaleEntity> sales, List<ExpenseEntity> expenses) {
+        assertThat(profitBetween(sales, expenses, LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31)))
+                .isGreaterThan(BigDecimal.ZERO);
+        assertThat(profitBetween(sales, expenses, LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31)))
+                .isLessThan(BigDecimal.ZERO);
+        assertThat(profitBetween(sales, expenses, LocalDate.of(2027, 1, 1), LocalDate.of(2027, 12, 31)))
+                .isGreaterThan(BigDecimal.ZERO);
 
-                LocalDate date = START_DATE;
-                while (!date.isAfter(END_DATE)) {
-                        assertThat(appointmentsByDate.getOrDefault(date, 0L))
-                                        .withFailMessage("Falta cobertura de citas para %s", date)
-                                        .isGreaterThanOrEqualTo(1L);
-                        date = date.plusDays(1);
-                }
+        Map<YearMonth, BigDecimal> monthlyProfit = buildMonthlyProfit(sales, expenses);
+        assertThat(monthlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) > 0);
+        assertThat(monthlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) < 0);
+
+        Map<String, BigDecimal> quarterlyProfit = buildQuarterlyProfit(monthlyProfit);
+        assertThat(quarterlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) > 0);
+        assertThat(quarterlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) < 0);
+    }
+
+    private BigDecimal profitBetween(List<SaleEntity> sales, List<ExpenseEntity> expenses, LocalDate fromDate, LocalDate toDate) {
+        BigDecimal totalSales = sales.stream()
+                .filter(sale -> !sale.getSaleDate().isBefore(fromDate) && !sale.getSaleDate().isAfter(toDate))
+                .map(SaleEntity::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalExpenses = expenses.stream()
+                .filter(expense -> !expense.getExpenseDate().isBefore(fromDate) && !expense.getExpenseDate().isAfter(toDate))
+                .map(ExpenseEntity::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return totalSales.subtract(totalExpenses);
+    }
+
+    private Map<YearMonth, BigDecimal> buildMonthlyProfit(List<SaleEntity> sales, List<ExpenseEntity> expenses) {
+        Map<YearMonth, BigDecimal> incomeByMonth = sales.stream()
+                .collect(Collectors.groupingBy(
+                        sale -> YearMonth.from(sale.getSaleDate()),
+                        Collectors.mapping(SaleEntity::getTotalAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                ));
+
+        Map<YearMonth, BigDecimal> expenseByMonth = expenses.stream()
+                .collect(Collectors.groupingBy(
+                        expense -> YearMonth.from(expense.getExpenseDate()),
+                        Collectors.mapping(ExpenseEntity::getAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                ));
+
+        Map<YearMonth, BigDecimal> result = new java.util.LinkedHashMap<>();
+        YearMonth month = YearMonth.from(START_DATE);
+        while (!month.isAfter(YearMonth.from(END_DATE))) {
+            result.put(month, incomeByMonth.getOrDefault(month, BigDecimal.ZERO).subtract(expenseByMonth.getOrDefault(month, BigDecimal.ZERO)));
+            month = month.plusMonths(1);
         }
+        return result;
+    }
 
-        
-
-        private void assertEconomicDiversity(List<SaleEntity> sales, List<ExpenseEntity> expenses) {
-                assertThat(profitBetween(sales, expenses, LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31)))
-                                .isGreaterThan(BigDecimal.ZERO);
-                assertThat(profitBetween(sales, expenses, LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31)))
-                                .isLessThan(BigDecimal.ZERO);
-                assertThat(profitBetween(sales, expenses, LocalDate.of(2027, 1, 1), LocalDate.of(2027, 12, 31)))
-                                .isGreaterThan(BigDecimal.ZERO);
-
-                Map<YearMonth, BigDecimal> monthlyProfit = buildMonthlyProfit(sales, expenses);
-                assertThat(monthlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) > 0);
-                assertThat(monthlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) < 0);
-
-                Map<String, BigDecimal> quarterlyProfit = buildQuarterlyProfit(monthlyProfit);
-                assertThat(quarterlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) > 0);
-                assertThat(quarterlyProfit.values()).anyMatch(value -> value.compareTo(BigDecimal.ZERO) < 0);
-        }
-
-        private BigDecimal profitBetween(List<SaleEntity> sales, List<ExpenseEntity> expenses, LocalDate fromDate,
-                        LocalDate toDate) {
-                BigDecimal totalSales = sales.stream()
-                                .filter(sale -> !sale.getSaleDate().isBefore(fromDate)
-                                                && !sale.getSaleDate().isAfter(toDate))
-                                .map(SaleEntity::getTotalAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                BigDecimal totalExpenses = expenses.stream()
-                                .filter(expense -> !expense.getExpenseDate().isBefore(fromDate)
-                                                && !expense.getExpenseDate().isAfter(toDate))
-                                .map(ExpenseEntity::getAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                return totalSales.subtract(totalExpenses);
-        }
-
-        private Map<YearMonth, BigDecimal> buildMonthlyProfit(List<SaleEntity> sales, List<ExpenseEntity> expenses) {
-                Map<YearMonth, BigDecimal> incomeByMonth = sales.stream()
-                                .collect(Collectors.groupingBy(
-                                                sale -> YearMonth.from(sale.getSaleDate()),
-                                                Collectors.mapping(SaleEntity::getTotalAmount, Collectors
-                                                                .reducing(BigDecimal.ZERO, BigDecimal::add))));
-
-                Map<YearMonth, BigDecimal> expenseByMonth = expenses.stream()
-                                .collect(Collectors.groupingBy(
-                                                expense -> YearMonth.from(expense.getExpenseDate()),
-                                                Collectors.mapping(ExpenseEntity::getAmount, Collectors
-                                                                .reducing(BigDecimal.ZERO, BigDecimal::add))));
-
-                Map<YearMonth, BigDecimal> result = new java.util.LinkedHashMap<>();
-                YearMonth month = YearMonth.from(START_DATE);
-                while (!month.isAfter(YearMonth.from(END_DATE))) {
-                        result.put(month, incomeByMonth.getOrDefault(month, BigDecimal.ZERO)
-                                        .subtract(expenseByMonth.getOrDefault(month, BigDecimal.ZERO)));
-                        month = month.plusMonths(1);
-                }
-                return result;
-        }
-
-        private Map<String, BigDecimal> buildQuarterlyProfit(Map<YearMonth, BigDecimal> monthlyProfit) {
-                return monthlyProfit.entrySet().stream()
-                                .collect(Collectors.groupingBy(
-                                                entry -> entry.getKey().getYear() + "-Q"
-                                                                + (((entry.getKey().getMonthValue() - 1) / 3) + 1),
-                                                Collectors.mapping(Map.Entry::getValue, Collectors
-                                                                .reducing(BigDecimal.ZERO, BigDecimal::add))));
-        }
+    private Map<String, BigDecimal> buildQuarterlyProfit(Map<YearMonth, BigDecimal> monthlyProfit) {
+        return monthlyProfit.entrySet().stream()
+                .collect(Collectors.groupingBy(
+                        entry -> entry.getKey().getYear() + "-Q" + (((entry.getKey().getMonthValue() - 1) / 3) + 1),
+                        Collectors.mapping(Map.Entry::getValue, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                ));
+    }
 }
