@@ -77,7 +77,8 @@ public class DevDataSeeder implements ApplicationRunner {
     private static final int WEEKLY_PRODUCT_SALES_MIN = 5;
     private static final int TARGET_INVENTORY_PRODUCTS = 160;
     private static final List<PaymentMethod> PAYMENT_METHODS = Arrays.asList(PaymentMethod.values());
-    private static final List<LocalTime> APPOINTMENT_TIME_SLOTS = buildTimeSlots(LocalTime.of(9, 0), LocalTime.of(19, 30), 30);
+    private static final List<LocalTime> APPOINTMENT_TIME_SLOTS = buildTimeSlots(LocalTime.of(9, 0),
+            LocalTime.of(19, 30), 30);
 
     private static final List<CategorySeed> CATEGORY_SEEDS = buildCategorySeeds();
     private static final List<ServiceSeed> SERVICE_SEEDS = buildServiceSeeds();
@@ -119,8 +120,7 @@ public class DevDataSeeder implements ApplicationRunner {
         if (existingDataCounts.hasAnyData()) {
             log.info(
                     "Seed de datos demo omitido porque la base ya contiene informacion. {}",
-                    existingDataCounts.describe()
-            );
+                    existingDataCounts.describe());
             return;
         }
 
@@ -141,11 +141,10 @@ public class DevDataSeeder implements ApplicationRunner {
         List<ServiceResponse> services = seedServices(categoriesByName, summary);
         List<ClientResponse> clients = seedClients(summary);
         List<SeededProfessional> professionals = seedProfessionals(summary);
-        List<SeededInventoryProduct> inventoryProducts = seedInventory(categoriesByName, summary);
 
-        seedExpenses(inventoryProducts, summary);
+        seedExpenses(summary);
         seedAppointments(clients, services, professionals, summary);
-        seedManualSales(clients, services, inventoryProducts, summary);
+        seedManualSales(clients, services, summary);
         shapeEconomicScenarios(services, summary);
 
         ExistingDataCounts finalCounts = snapshotCounts();
@@ -230,8 +229,7 @@ public class DevDataSeeder implements ApplicationRunner {
                     professionalSeed.phone(),
                     professionalSeed.email(),
                     PROFESSIONAL_DEMO_PASSWORD,
-                    professionalSeed.active()
-            );
+                    professionalSeed.active());
 
             ProfessionalResponse created = professionalService.create(request);
             professionals.add(new SeededProfessional(created, professionalSeed));
@@ -243,8 +241,7 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private List<SeededInventoryProduct> seedInventory(
             Map<String, CategoryResponse> categoriesByName,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         List<SeededInventoryProduct> products = new ArrayList<>();
 
         for (int index = 0; index < INVENTORY_TEMPLATES.size(); index++) {
@@ -252,7 +249,8 @@ public class DevDataSeeder implements ApplicationRunner {
             if (template.hasVariants()) {
                 CreateInventoryProductRequest request = CreateInventoryProductRequest.builder()
                         .name(template.name())
-                        .description(buildInventoryDescription(template.categoryName(), template.name(), template.sellable()))
+                        .description(buildInventoryDescription(template.categoryName(), template.name(),
+                                template.sellable()))
                         .categoryId(categoriesByName.get(template.categoryName()).getId())
                         .hasVariants(true)
                         .variants(buildVariantRequests(template))
@@ -268,8 +266,7 @@ public class DevDataSeeder implements ApplicationRunner {
                         resolveStockProfile(created.getStock(), created.getMinimumStock()),
                         template.categoryName(),
                         true,
-                        variants
-                ));
+                        variants));
 
                 summary.inventoryProductsCreated++;
                 summary.inventoryVariantsCreated += variants.size();
@@ -283,15 +280,18 @@ public class DevDataSeeder implements ApplicationRunner {
                     ? resolveStockProfile(template.stock(), template.minimumStock())
                     : resolveStockProfile(index);
             int minimumStock = template.minimumStock() != null ? template.minimumStock() : 2 + (index % 5);
-            int stock = template.stock() != null ? template.stock() : resolveInitialStock(stockProfile, minimumStock, index);
+            int stock = template.stock() != null ? template.stock()
+                    : resolveInitialStock(stockProfile, minimumStock, index);
 
             CreateInventoryProductRequest request = CreateInventoryProductRequest.builder()
                     .name(template.name())
-                    .description(buildInventoryDescription(template.categoryName(), template.name(), template.sellable()))
+                    .description(
+                            buildInventoryDescription(template.categoryName(), template.name(), template.sellable()))
                     .categoryId(categoriesByName.get(template.categoryName()).getId())
                     .stock(stock)
                     .minimumStock(minimumStock)
-                    .sku(template.sku() != null ? template.sku() : (index % 5 == 0 ? null : buildSku(template.categoryName(), index)))
+                    .sku(template.sku() != null ? template.sku()
+                            : (index % 5 == 0 ? null : buildSku(template.categoryName(), index)))
                     .purchasePrice(template.purchasePrice())
                     .hasVariants(false)
                     .build();
@@ -305,8 +305,7 @@ public class DevDataSeeder implements ApplicationRunner {
                     stockProfile,
                     template.categoryName(),
                     false,
-                    List.of()
-            ));
+                    List.of()));
 
             summary.inventoryProductsCreated++;
             if (stock > 0) {
@@ -332,8 +331,7 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private List<SeededInventoryVariant> buildSeededVariants(
             InventoryProductResponse product,
-            InventoryTemplate template
-    ) {
+            InventoryTemplate template) {
         Map<String, InventoryVariantTemplate> templatesByLabel = template.variants().stream()
                 .collect(Collectors.toMap(InventoryVariantTemplate::variantLabel, variant -> variant));
 
@@ -347,8 +345,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             variant.getSku(),
                             variant.getPurchasePrice(),
                             initialStock,
-                            resolveStockProfile(variant.getStock(), variant.getMinimumStock())
-                    );
+                            resolveStockProfile(variant.getStock(), variant.getMinimumStock()));
                 })
                 .toList();
     }
@@ -367,8 +364,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             variant.purchasePrice(),
                             product.sellable(),
                             variant.stockProfile(),
-                            product.categoryName()
-                    ));
+                            product.categoryName()));
                 }
                 continue;
             }
@@ -381,8 +377,7 @@ public class DevDataSeeder implements ApplicationRunner {
                     product.purchasePrice(),
                     product.sellable(),
                     product.stockProfile(),
-                    product.categoryName()
-            ));
+                    product.categoryName()));
         }
 
         return items;
@@ -395,10 +390,8 @@ public class DevDataSeeder implements ApplicationRunner {
                 .orElseThrow(() -> new IllegalStateException("No existe item demo de inventario: " + itemName));
     }
 
-    private void seedExpenses(List<SeededInventoryProduct> inventoryProducts, SeedSummary summary) {
+    private void seedExpenses(SeedSummary summary) {
         seedRecurringExpenses(summary);
-        seedShowcaseSupplyExpenses(inventoryProducts, summary);
-        seedMonthlySupplyExpenses(inventoryProducts, summary);
         seedStrategicExpenses(summary);
     }
 
@@ -417,8 +410,7 @@ public class DevDataSeeder implements ApplicationRunner {
                                 .quantity(template.quantity())
                                 .amount(calculateRecurringExpenseAmount(template.baseAmount(), plan, month))
                                 .notes(noteFrom(EXPENSE_NOTES, month.getMonthValue() + template.dayOfMonth()))
-                                .build()
-                );
+                                .build());
                 summary.manualExpensesCreated++;
             }
 
@@ -431,8 +423,7 @@ public class DevDataSeeder implements ApplicationRunner {
                                 .quantity(1)
                                 .amount(money(month.getYear() >= 2027 ? "840.00" : "760.00"))
                                 .notes("Renovacion anual del seguro del negocio.")
-                                .build()
-                );
+                                .build());
                 summary.manualExpensesCreated++;
             }
 
@@ -446,8 +437,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 requireDemoInventoryItem(inventoryItems, "Champu L'Oreal Prof"),
                 requireDemoInventoryItem(inventoryItems, "Acondicionador Kerastase"),
                 requireDemoInventoryItem(inventoryItems, "Camiseta Basica - Roja / M"),
-                requireDemoInventoryItem(inventoryItems, "Tornillo Galvanizado - 6mm / 40mm")
-        );
+                requireDemoInventoryItem(inventoryItems, "Tornillo Galvanizado - 6mm / 40mm"));
 
         for (int index = 0; index < showcaseItems.size(); index++) {
             SeededInventoryItem item = showcaseItems.get(index);
@@ -463,8 +453,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             .notes("Reposicion demo con referencia directa de inventario.")
                             .inventoryProductId(item.productId())
                             .inventoryProductVariantId(item.variantId())
-                            .build()
-            );
+                            .build());
 
             summary.manualExpensesCreated++;
         }
@@ -473,7 +462,8 @@ public class DevDataSeeder implements ApplicationRunner {
     private void seedMonthlySupplyExpenses(List<SeededInventoryProduct> inventoryProducts, SeedSummary summary) {
         List<SeededInventoryItem> supplyCandidates = buildInventoryItems(inventoryProducts).stream()
                 .filter(SeededInventoryItem::sellable)
-                .filter(item -> item.stockProfile() == StockProfile.HIGH || item.stockProfile() == StockProfile.BALANCED)
+                .filter(item -> item.stockProfile() == StockProfile.HIGH
+                        || item.stockProfile() == StockProfile.BALANCED)
                 .toList();
 
         YearMonth month = FIRST_SEED_MONTH;
@@ -484,7 +474,8 @@ public class DevDataSeeder implements ApplicationRunner {
             int supplyCount = plan.targetOutcome() == OutcomeTarget.GAIN ? 3 : 2;
 
             for (int index = 0; index < supplyCount; index++) {
-                SeededInventoryItem item = supplyCandidates.get(Math.floorMod(globalIndex * 3 + index, supplyCandidates.size()));
+                SeededInventoryItem item = supplyCandidates
+                        .get(Math.floorMod(globalIndex * 3 + index, supplyCandidates.size()));
                 int quantity = 3 + Math.floorMod(globalIndex + index, 5);
 
                 expenseService.createExpense(
@@ -497,8 +488,7 @@ public class DevDataSeeder implements ApplicationRunner {
                                 .notes(noteFrom(EXPENSE_NOTES, globalIndex + index))
                                 .inventoryProductId(item.productId())
                                 .inventoryProductVariantId(item.variantId())
-                                .build()
-                );
+                                .build());
 
                 summary.manualExpensesCreated++;
                 globalIndex++;
@@ -518,8 +508,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             .quantity(plan.quantity())
                             .amount(plan.amount())
                             .notes(plan.notes())
-                            .build()
-            );
+                            .build());
             summary.manualExpensesCreated++;
         }
     }
@@ -528,8 +517,7 @@ public class DevDataSeeder implements ApplicationRunner {
             List<ClientResponse> clients,
             List<ServiceResponse> services,
             List<SeededProfessional> professionals,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         ensureDailyAppointmentsCoverage(clients, services, professionals, summary);
         seedAdditionalAppointments(clients, services, professionals, summary);
     }
@@ -538,8 +526,7 @@ public class DevDataSeeder implements ApplicationRunner {
             List<ClientResponse> clients,
             List<ServiceResponse> services,
             List<SeededProfessional> professionals,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         Map<String, List<ServiceResponse>> servicesByCategory = services.stream()
                 .filter(service -> Boolean.TRUE.equals(service.getActive()))
                 .collect(Collectors.groupingBy(service -> service.getCategory().getName()));
@@ -559,8 +546,7 @@ public class DevDataSeeder implements ApplicationRunner {
             List<ClientResponse> clients,
             List<ServiceResponse> services,
             List<SeededProfessional> professionals,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         Map<String, List<ServiceResponse>> servicesByCategory = services.stream()
                 .filter(service -> Boolean.TRUE.equals(service.getActive()))
                 .collect(Collectors.groupingBy(service -> service.getCategory().getName()));
@@ -572,8 +558,10 @@ public class DevDataSeeder implements ApplicationRunner {
             MonthPlan plan = MONTH_PLANS.get(month);
 
             for (int extraIndex = 0; extraIndex < plan.additionalAppointments(); extraIndex++) {
-                LocalDate appointmentDate = month.atDay(1 + Math.floorMod((extraIndex * 5) + month.getMonthValue(), month.lengthOfMonth()));
-                createAppointmentForDate(appointmentDate, sequence + extraIndex, false, clients, servicesByCategory, professionals, summary);
+                LocalDate appointmentDate = month
+                        .atDay(1 + Math.floorMod((extraIndex * 5) + month.getMonthValue(), month.lengthOfMonth()));
+                createAppointmentForDate(appointmentDate, sequence + extraIndex, false, clients, servicesByCategory,
+                        professionals, summary);
             }
 
             sequence += 100;
@@ -588,12 +576,12 @@ public class DevDataSeeder implements ApplicationRunner {
             List<ClientResponse> clients,
             Map<String, List<ServiceResponse>> servicesByCategory,
             List<SeededProfessional> professionals,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         MonthPlan plan = MONTH_PLANS.get(YearMonth.from(appointmentDate));
         ClientResponse client = selectAppointmentClient(clients, plan, sequence, appointmentDate);
         SeededProfessional professional = selectProfessional(professionals, sequence, appointmentDate);
-        ServiceResponse service = selectServiceForProfessional(servicesByCategory, professional, sequence, appointmentDate);
+        ServiceResponse service = selectServiceForProfessional(servicesByCategory, professional, sequence,
+                appointmentDate);
         AppointmentStatus finalStatus = determineAppointmentStatus(plan, appointmentDate, sequence, dailyCoverage);
 
         AppointmentRequest request = new AppointmentRequest();
@@ -620,26 +608,20 @@ public class DevDataSeeder implements ApplicationRunner {
     private void seedManualSales(
             List<ClientResponse> clients,
             List<ServiceResponse> services,
-            List<SeededInventoryProduct> inventoryProducts,
-            SeedSummary summary
-    ) {
-        seedShowcaseManualProductSales(clients, inventoryProducts, summary);
-        ensureWeeklyProductSalesCoverage(clients, inventoryProducts, summary);
+            SeedSummary summary) {
         seedManualServiceSales(clients, services, summary);
     }
 
     private void seedShowcaseManualProductSales(
             List<ClientResponse> clients,
             List<SeededInventoryProduct> inventoryProducts,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         List<SeededInventoryItem> inventoryItems = buildInventoryItems(inventoryProducts);
         List<SeededInventoryItem> showcaseItems = List.of(
                 requireDemoInventoryItem(inventoryItems, "Champu L'Oreal Prof"),
                 requireDemoInventoryItem(inventoryItems, "Crema Hidratante Facial"),
                 requireDemoInventoryItem(inventoryItems, "Camiseta Basica - Azul / M"),
-                requireDemoInventoryItem(inventoryItems, "Tornillo Galvanizado - 4mm / 30mm")
-        );
+                requireDemoInventoryItem(inventoryItems, "Tornillo Galvanizado - 4mm / 30mm"));
 
         for (int index = 0; index < showcaseItems.size(); index++) {
             SeededInventoryItem item = showcaseItems.get(index);
@@ -656,8 +638,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             .paymentMethod(paymentMethodFrom(30_000 + index))
                             .saleDate(LocalDate.of(2026, 4, 2).plusDays(index * 4L))
                             .notes("Venta demo con referencia directa de inventario.")
-                            .build()
-            );
+                            .build());
 
             summary.manualProductSalesCreated++;
         }
@@ -666,8 +647,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private void ensureWeeklyProductSalesCoverage(
             List<ClientResponse> clients,
             List<SeededInventoryProduct> inventoryProducts,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         List<SeededInventoryItem> sellableItems = buildInventoryItems(inventoryProducts).stream()
                 .filter(SeededInventoryItem::sellable)
                 .toList();
@@ -680,8 +660,7 @@ public class DevDataSeeder implements ApplicationRunner {
         Map<InventoryItemKey, Integer> sellableUnitsByItem = buildSellableUnitsMap(
                 sellableItems,
                 productsById,
-                variantsById
-        );
+                variantsById);
 
         LocalDate weekStart = SEED_START_DATE.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         int globalIndex = 0;
@@ -692,15 +671,15 @@ public class DevDataSeeder implements ApplicationRunner {
                 continue;
             }
 
-            MonthPlan plan = MONTH_PLANS.get(YearMonth.from(weekStart.plusDays(Math.min(3, SEED_END_DATE.toEpochDay() - weekStart.toEpochDay()))));
+            MonthPlan plan = MONTH_PLANS.get(YearMonth
+                    .from(weekStart.plusDays(Math.min(3, SEED_END_DATE.toEpochDay() - weekStart.toEpochDay()))));
             int weeklySales = Math.max(WEEKLY_PRODUCT_SALES_MIN, plan.productSalesPerWeek());
 
             for (int saleIndex = 0; saleIndex < weeklySales; saleIndex++) {
                 SeededInventoryItem item = selectInventoryItemForSale(
                         sellableItems,
                         sellableUnitsByItem,
-                        globalIndex + saleIndex
-                );
+                        globalIndex + saleIndex);
                 LocalDate saleDate = weekStart.plusDays(saleIndex % 5);
                 if (saleDate.isAfter(SEED_END_DATE)) {
                     saleDate = SEED_END_DATE;
@@ -717,8 +696,7 @@ public class DevDataSeeder implements ApplicationRunner {
                                 .paymentMethod(paymentMethodFrom(globalIndex + saleIndex))
                                 .saleDate(saleDate)
                                 .notes(noteFrom(SALE_NOTES, globalIndex + saleIndex))
-                                .build()
-                );
+                                .build());
 
                 sellableUnitsByItem.computeIfPresent(item.key(), (key, value) -> value - 1);
                 summary.manualProductSalesCreated++;
@@ -733,8 +711,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private void seedManualServiceSales(
             List<ClientResponse> clients,
             List<ServiceResponse> services,
-            SeedSummary summary
-    ) {
+            SeedSummary summary) {
         List<ServiceResponse> activeServices = services.stream()
                 .filter(service -> Boolean.TRUE.equals(service.getActive()))
                 .sorted(Comparator.comparing(ServiceResponse::getPrice).reversed())
@@ -747,8 +724,10 @@ public class DevDataSeeder implements ApplicationRunner {
             MonthPlan plan = MONTH_PLANS.get(month);
 
             for (int saleIndex = 0; saleIndex < plan.manualServiceSales(); saleIndex++) {
-                ServiceResponse service = activeServices.get(Math.floorMod(globalIndex + saleIndex, activeServices.size()));
-                LocalDate saleDate = month.atDay(1 + Math.floorMod((saleIndex * 3) + month.getMonthValue(), month.lengthOfMonth()));
+                ServiceResponse service = activeServices
+                        .get(Math.floorMod(globalIndex + saleIndex, activeServices.size()));
+                LocalDate saleDate = month
+                        .atDay(1 + Math.floorMod((saleIndex * 3) + month.getMonthValue(), month.lengthOfMonth()));
 
                 saleService.createManualSale(
                         CreateSaleRequest.builder()
@@ -760,8 +739,7 @@ public class DevDataSeeder implements ApplicationRunner {
                                 .paymentMethod(paymentMethodFrom(globalIndex + saleIndex))
                                 .saleDate(saleDate)
                                 .notes(noteFrom(SALE_NOTES, globalIndex + saleIndex))
-                                .build()
-                );
+                                .build());
 
                 summary.manualServiceSalesCreated++;
             }
@@ -790,10 +768,12 @@ public class DevDataSeeder implements ApplicationRunner {
 
             BigDecimal profit = calculateProfit(plan.month().atDay(1), plan.month().atEndOfMonth());
             if (plan.targetOutcome() == OutcomeTarget.GAIN && profit.compareTo(plan.targetMargin()) < 0) {
-                createSupplementalServiceSales(plan.month(), plan.targetMargin().subtract(profit).add(money("20.00")), premiumServices, summary, plan.month().getMonthValue());
+                createSupplementalServiceSales(plan.month(), plan.targetMargin().subtract(profit).add(money("20.00")),
+                        premiumServices, summary, plan.month().getMonthValue());
             }
             if (plan.targetOutcome() == OutcomeTarget.LOSS && profit.compareTo(plan.targetMargin().negate()) > 0) {
-                createCorrectiveExpense(plan.month(), profit.add(plan.targetMargin()).add(money("20.00")), summary, "Ajuste operativo " + plan.month());
+                createCorrectiveExpense(plan.month(), profit.add(plan.targetMargin()).add(money("20.00")), summary,
+                        "Ajuste operativo " + plan.month());
             }
         }
     }
@@ -811,10 +791,14 @@ public class DevDataSeeder implements ApplicationRunner {
                 BigDecimal profit = calculateProfit(fromDate, toDate);
 
                 if (target == OutcomeTarget.GAIN && profit.compareTo(targetQuarterMargin(year, quarter)) < 0) {
-                    createSupplementalServiceSales(YearMonth.from(toDate), targetQuarterMargin(year, quarter).subtract(profit).add(money("35.00")), premiumServices, summary, year + quarter);
+                    createSupplementalServiceSales(YearMonth.from(toDate),
+                            targetQuarterMargin(year, quarter).subtract(profit).add(money("35.00")), premiumServices,
+                            summary, year + quarter);
                 }
                 if (target == OutcomeTarget.LOSS && profit.compareTo(targetQuarterMargin(year, quarter).negate()) > 0) {
-                    createCorrectiveExpense(YearMonth.from(toDate), profit.add(targetQuarterMargin(year, quarter)).add(money("35.00")), summary, "Ajuste trimestral Q" + quarter + " " + year);
+                    createCorrectiveExpense(YearMonth.from(toDate),
+                            profit.add(targetQuarterMargin(year, quarter)).add(money("35.00")), summary,
+                            "Ajuste trimestral Q" + quarter + " " + year);
                 }
             }
         }
@@ -832,10 +816,12 @@ public class DevDataSeeder implements ApplicationRunner {
             BigDecimal profit = calculateProfit(fromDate, toDate);
 
             if (target == OutcomeTarget.GAIN && profit.compareTo(targetYearMargin(year)) < 0) {
-                createSupplementalServiceSales(YearMonth.of(year, 12), targetYearMargin(year).subtract(profit).add(money("50.00")), premiumServices, summary, year);
+                createSupplementalServiceSales(YearMonth.of(year, 12),
+                        targetYearMargin(year).subtract(profit).add(money("50.00")), premiumServices, summary, year);
             }
             if (target == OutcomeTarget.LOSS && profit.compareTo(targetYearMargin(year).negate()) > 0) {
-                createCorrectiveExpense(YearMonth.of(year, 12), profit.add(targetYearMargin(year)).add(money("50.00")), summary, "Ajuste anual " + year);
+                createCorrectiveExpense(YearMonth.of(year, 12), profit.add(targetYearMargin(year)).add(money("50.00")),
+                        summary, "Ajuste anual " + year);
             }
         }
     }
@@ -845,14 +831,14 @@ public class DevDataSeeder implements ApplicationRunner {
             BigDecimal requiredIncome,
             List<ServiceResponse> premiumServices,
             SeedSummary summary,
-            int offset
-    ) {
+            int offset) {
         BigDecimal remaining = requiredIncome.setScale(2, RoundingMode.HALF_UP);
         int index = 0;
 
         while (remaining.compareTo(BigDecimal.ZERO) > 0) {
             ServiceResponse service = premiumServices.get(Math.floorMod(offset + index, premiumServices.size()));
-            BigDecimal unitPrice = BigDecimal.valueOf(service.getPrice()).multiply(new BigDecimal("1.08")).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal unitPrice = BigDecimal.valueOf(service.getPrice()).multiply(new BigDecimal("1.08")).setScale(2,
+                    RoundingMode.HALF_UP);
             int quantity = Math.min(8, Math.max(1, remaining.divide(unitPrice, 0, RoundingMode.CEILING).intValue()));
             BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity)).setScale(2, RoundingMode.HALF_UP);
             LocalDate saleDate = month.atDay(1 + Math.floorMod((offset + index) * 2, month.lengthOfMonth()));
@@ -867,8 +853,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             .paymentMethod(paymentMethodFrom(offset + index))
                             .saleDate(saleDate)
                             .notes("Ajuste dirigido del seed para reforzar escenario economico.")
-                            .build()
-            );
+                            .build());
 
             summary.manualServiceSalesCreated++;
             summary.correctiveServiceSalesCreated++;
@@ -893,8 +878,7 @@ public class DevDataSeeder implements ApplicationRunner {
                             .quantity(1)
                             .amount(chunk)
                             .notes("Ajuste dirigido del seed para asegurar diversidad economica.")
-                            .build()
-            );
+                            .build());
 
             summary.manualExpensesCreated++;
             summary.correctiveExpensesCreated++;
@@ -915,8 +899,7 @@ public class DevDataSeeder implements ApplicationRunner {
             List<ClientResponse> clients,
             MonthPlan plan,
             int sequence,
-            LocalDate appointmentDate
-    ) {
+            LocalDate appointmentDate) {
         if (Math.floorMod(sequence * 19 + appointmentDate.getDayOfYear(), 100) < plan.walkInPercent()) {
             return clients.getFirst();
         }
@@ -924,20 +907,21 @@ public class DevDataSeeder implements ApplicationRunner {
         return clients.get(1 + Math.floorMod(sequence * 7 + appointmentDate.getDayOfMonth(), clients.size() - 1));
     }
 
-    private SeededProfessional selectProfessional(List<SeededProfessional> professionals, int sequence, LocalDate appointmentDate) {
+    private SeededProfessional selectProfessional(List<SeededProfessional> professionals, int sequence,
+            LocalDate appointmentDate) {
         List<SeededProfessional> activeProfessionals = professionals.stream()
                 .filter(professional -> Boolean.TRUE.equals(professional.response().getActive()))
                 .toList();
 
-        return activeProfessionals.get(Math.floorMod(sequence + appointmentDate.getDayOfWeek().getValue(), activeProfessionals.size()));
+        return activeProfessionals
+                .get(Math.floorMod(sequence + appointmentDate.getDayOfWeek().getValue(), activeProfessionals.size()));
     }
 
     private ServiceResponse selectServiceForProfessional(
             Map<String, List<ServiceResponse>> servicesByCategory,
             SeededProfessional professional,
             int sequence,
-            LocalDate appointmentDate
-    ) {
+            LocalDate appointmentDate) {
         List<ServiceResponse> preferredServices = professional.seed().preferredCategories().stream()
                 .map(servicesByCategory::get)
                 .filter(list -> list != null && !list.isEmpty())
@@ -945,7 +929,8 @@ public class DevDataSeeder implements ApplicationRunner {
                 .toList();
 
         if (!preferredServices.isEmpty() && Math.floorMod(sequence * 11 + appointmentDate.getDayOfMonth(), 100) < 72) {
-            return preferredServices.get(Math.floorMod(sequence * 3 + appointmentDate.getMonthValue(), preferredServices.size()));
+            return preferredServices
+                    .get(Math.floorMod(sequence * 3 + appointmentDate.getMonthValue(), preferredServices.size()));
         }
 
         List<ServiceResponse> allServices = servicesByCategory.values().stream().flatMap(List::stream).toList();
@@ -956,8 +941,7 @@ public class DevDataSeeder implements ApplicationRunner {
             MonthPlan plan,
             LocalDate appointmentDate,
             int sequence,
-            boolean dailyCoverage
-    ) {
+            boolean dailyCoverage) {
         if (dailyCoverage && appointmentDate.getDayOfMonth() == 1) {
             return AppointmentStatus.CONFIRMED;
         }
@@ -978,7 +962,8 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private LocalTime selectAppointmentTime(int sequence, boolean dailyCoverage) {
         int multiplier = dailyCoverage ? 2 : 5;
-        return APPOINTMENT_TIME_SLOTS.get(Math.floorMod(sequence * multiplier + (dailyCoverage ? 1 : 3), APPOINTMENT_TIME_SLOTS.size()));
+        return APPOINTMENT_TIME_SLOTS
+                .get(Math.floorMod(sequence * multiplier + (dailyCoverage ? 1 : 3), APPOINTMENT_TIME_SLOTS.size()));
     }
 
     private Double calculateAppointmentPrice(Double basePrice, MonthPlan plan, int sequence) {
@@ -1010,8 +995,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private Map<InventoryItemKey, Integer> buildSellableUnitsMap(
             List<SeededInventoryItem> sellableItems,
             Map<Long, InventoryProductEntity> productsById,
-            Map<Long, InventoryProductVariantEntity> variantsById
-    ) {
+            Map<Long, InventoryProductVariantEntity> variantsById) {
         Map<InventoryItemKey, Integer> sellableUnits = new HashMap<>();
         int totalSellableUnits = 0;
 
@@ -1021,7 +1005,8 @@ public class DevDataSeeder implements ApplicationRunner {
                 continue;
             }
 
-            int protectedStock = calculateProtectedStock(item.stockProfile(), stockSnapshot.stock(), stockSnapshot.minimumStock());
+            int protectedStock = calculateProtectedStock(item.stockProfile(), stockSnapshot.stock(),
+                    stockSnapshot.minimumStock());
 
             int sellable = Math.max(0, stockSnapshot.stock() - protectedStock);
             sellableUnits.put(item.key(), sellable);
@@ -1030,7 +1015,8 @@ public class DevDataSeeder implements ApplicationRunner {
 
         int requiredUnits = summaryWeeksBetween() * WEEKLY_PRODUCT_SALES_MIN;
         if (totalSellableUnits < requiredUnits) {
-            throw new IllegalStateException("No hay stock vendible suficiente para garantizar las ventas de producto semanales");
+            throw new IllegalStateException(
+                    "No hay stock vendible suficiente para garantizar las ventas de producto semanales");
         }
 
         return sellableUnits;
@@ -1039,8 +1025,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private StockSnapshot resolveCurrentStockSnapshot(
             SeededInventoryItem item,
             Map<Long, InventoryProductEntity> productsById,
-            Map<Long, InventoryProductVariantEntity> variantsById
-    ) {
+            Map<Long, InventoryProductVariantEntity> variantsById) {
         if (item.variant()) {
             InventoryProductVariantEntity variant = variantsById.get(item.variantId());
             return variant == null ? null : new StockSnapshot(variant.getStock(), variant.getMinimumStock());
@@ -1062,8 +1047,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private SeededInventoryItem selectInventoryItemForSale(
             List<SeededInventoryItem> sellableItems,
             Map<InventoryItemKey, Integer> sellableUnitsByItem,
-            int sequence
-    ) {
+            int sequence) {
         int startIndex = Math.floorMod(sequence * 7, sellableItems.size());
 
         for (int offset = 0; offset < sellableItems.size(); offset++) {
@@ -1149,8 +1133,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 inventoryProductRepository.count(),
                 expenseRepository.count(),
                 appointmentRepository.count(),
-                saleRepository.count()
-        );
+                saleRepository.count());
     }
 
     private String correctiveExpenseConcept(String label, int index) {
@@ -1162,8 +1145,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Ordenadores y TPV",
                 "Consultoria externa",
                 "Mantenimiento extraordinario",
-                "Campana publicitaria intensiva"
-        );
+                "Campana publicitaria intensiva");
         return concepts.get(Math.floorMod(label.hashCode() + index, concepts.size()));
     }
 
@@ -1211,7 +1193,8 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private String buildSku(String categoryName, int index) {
         String normalizedCategory = normalizeToken(categoryName);
-        String prefix = normalizedCategory.substring(0, Math.min(3, normalizedCategory.length())).toUpperCase(Locale.ROOT);
+        String prefix = normalizedCategory.substring(0, Math.min(3, normalizedCategory.length()))
+                .toUpperCase(Locale.ROOT);
         return "DEM-" + prefix + "-" + String.format("%04d", index + 1);
     }
 
@@ -1279,65 +1262,96 @@ public class DevDataSeeder implements ApplicationRunner {
                 new CategorySeed("Masajes y Bienestar", "teal", "spa"),
                 new CategorySeed("Tratamientos Capilares", "cyan", "water_drop"),
                 new CategorySeed("Maquillaje", "red", "brush"),
-                new CategorySeed("Retail Profesional", "indigo", "shopping_bag")
-        );
+                new CategorySeed("Retail Profesional", "indigo", "shopping_bag"));
     }
 
     private static List<ServiceSeed> buildServiceSeeds() {
         return List.of(
-                new ServiceSeed("Corte femenino express", "Corte de mantenimiento con acabado natural.", 45, 24.00, true, "Corte y Peinado"),
-                new ServiceSeed("Lavado y brushing pulido", "Lavado completo con secado trabajado.", 45, 23.00, true, "Corte y Peinado"),
-                new ServiceSeed("Peinado ondas suaves", "Ondas abiertas para evento o diario.", 60, 29.00, true, "Corte y Peinado"),
-                new ServiceSeed("Recogido invitada", "Recogido elegante para celebraciones.", 75, 48.00, true, "Corte y Peinado"),
+                new ServiceSeed("Corte femenino express", "Corte de mantenimiento con acabado natural.", 45, 24.00,
+                        true, "Corte y Peinado"),
+                new ServiceSeed("Lavado y brushing pulido", "Lavado completo con secado trabajado.", 45, 23.00, true,
+                        "Corte y Peinado"),
+                new ServiceSeed("Peinado ondas suaves", "Ondas abiertas para evento o diario.", 60, 29.00, true,
+                        "Corte y Peinado"),
+                new ServiceSeed("Recogido invitada", "Recogido elegante para celebraciones.", 75, 48.00, true,
+                        "Corte y Peinado"),
                 new ServiceSeed("Corte infantil", "Servicio rapido para peques.", 30, 15.00, true, "Corte y Peinado"),
-                new ServiceSeed("Color raiz", "Cobertura de raiz y uniformidad de tono.", 90, 41.00, true, "Coloracion"),
-                new ServiceSeed("Bano de color brillo", "Refresco de color y brillo global.", 75, 46.00, true, "Coloracion"),
-                new ServiceSeed("Matiz corrector", "Correccion de reflejo y mantenimiento.", 45, 28.00, true, "Coloracion"),
+                new ServiceSeed("Color raiz", "Cobertura de raiz y uniformidad de tono.", 90, 41.00, true,
+                        "Coloracion"),
+                new ServiceSeed("Bano de color brillo", "Refresco de color y brillo global.", 75, 46.00, true,
+                        "Coloracion"),
+                new ServiceSeed("Matiz corrector", "Correccion de reflejo y mantenimiento.", 45, 28.00, true,
+                        "Coloracion"),
                 new ServiceSeed("Mechas babylights", "Aclarado fino y luminoso.", 150, 102.00, true, "Coloracion"),
-                new ServiceSeed("Balayage completo", "Tecnica degradada con acabado premium.", 180, 148.00, true, "Coloracion"),
-                new ServiceSeed("Color fantasia", "Aplicacion de tonos creativos personalizados.", 150, 118.00, false, "Coloracion"),
-                new ServiceSeed("Ritual plex post color", "Tratamiento reparador tras trabajo tecnico.", 45, 34.00, true, "Coloracion"),
-                new ServiceSeed("Corte caballero tradicional", "Corte clasico a tijera o maquina.", 30, 17.00, true, "Barberia"),
+                new ServiceSeed("Balayage completo", "Tecnica degradada con acabado premium.", 180, 148.00, true,
+                        "Coloracion"),
+                new ServiceSeed("Color fantasia", "Aplicacion de tonos creativos personalizados.", 150, 118.00, false,
+                        "Coloracion"),
+                new ServiceSeed("Ritual plex post color", "Tratamiento reparador tras trabajo tecnico.", 45, 34.00,
+                        true, "Coloracion"),
+                new ServiceSeed("Corte caballero tradicional", "Corte clasico a tijera o maquina.", 30, 17.00, true,
+                        "Barberia"),
                 new ServiceSeed("Corte fade premium", "Degradado tecnico con lavado.", 45, 25.00, true, "Barberia"),
                 new ServiceSeed("Arreglo de barba", "Perfilado y forma de barba.", 30, 16.00, true, "Barberia"),
                 new ServiceSeed("Afeitado clasico", "Afeitado con toalla caliente.", 30, 19.00, true, "Barberia"),
                 new ServiceSeed("Manicura semipermanente", "Preparacion, esmalte y sellado.", 60, 27.00, true, "Unas"),
                 new ServiceSeed("Pedicura spa", "Pedicura completa con exfoliacion.", 75, 35.00, true, "Unas"),
-                new ServiceSeed("Retirada y refuerzo", "Retirada de producto anterior y refuerzo.", 45, 20.00, true, "Unas"),
+                new ServiceSeed("Retirada y refuerzo", "Retirada de producto anterior y refuerzo.", 45, 20.00, true,
+                        "Unas"),
                 new ServiceSeed("Nail art premium", "Decoracion avanzada personalizada.", 60, 30.00, false, "Unas"),
-                new ServiceSeed("Limpieza facial express", "Puesta a punto rapida del rostro.", 40, 30.00, true, "Estetica Facial"),
-                new ServiceSeed("Higiene facial profunda", "Limpieza completa con extraccion.", 75, 52.00, true, "Estetica Facial"),
-                new ServiceSeed("Lifting de pestanas", "Curvado y elevacion de pestanas.", 60, 39.00, true, "Estetica Facial"),
-                new ServiceSeed("Diseno de cejas", "Definicion de ceja con acabado limpio.", 30, 19.00, true, "Estetica Facial"),
-                new ServiceSeed("Tratamiento glow cabina", "Ritual iluminador en cabina.", 60, 58.00, true, "Estetica Facial"),
+                new ServiceSeed("Limpieza facial express", "Puesta a punto rapida del rostro.", 40, 30.00, true,
+                        "Estetica Facial"),
+                new ServiceSeed("Higiene facial profunda", "Limpieza completa con extraccion.", 75, 52.00, true,
+                        "Estetica Facial"),
+                new ServiceSeed("Lifting de pestanas", "Curvado y elevacion de pestanas.", 60, 39.00, true,
+                        "Estetica Facial"),
+                new ServiceSeed("Diseno de cejas", "Definicion de ceja con acabado limpio.", 30, 19.00, true,
+                        "Estetica Facial"),
+                new ServiceSeed("Tratamiento glow cabina", "Ritual iluminador en cabina.", 60, 58.00, true,
+                        "Estetica Facial"),
                 new ServiceSeed("Depilacion cejas", "Depilacion precisa de cejas.", 20, 12.00, true, "Depilacion"),
-                new ServiceSeed("Depilacion labio", "Servicio rapido de depilacion facial.", 15, 8.00, true, "Depilacion"),
+                new ServiceSeed("Depilacion labio", "Servicio rapido de depilacion facial.", 15, 8.00, true,
+                        "Depilacion"),
                 new ServiceSeed("Piernas completas", "Depilacion de piernas completas.", 45, 24.00, true, "Depilacion"),
                 new ServiceSeed("Axilas y ingles", "Pack de depilacion corporal.", 30, 21.00, true, "Depilacion"),
-                new ServiceSeed("Masaje relajante espalda", "Descarga y relajacion de espalda.", 45, 36.00, true, "Masajes y Bienestar"),
-                new ServiceSeed("Masaje descontracturante", "Trabajo profundo muscular.", 60, 48.00, true, "Masajes y Bienestar"),
-                new ServiceSeed("Ritual piernas ligeras", "Masaje drenante y alivio de piernas.", 45, 39.00, true, "Masajes y Bienestar"),
-                new ServiceSeed("Masaje velas calientes", "Experiencia sensorial premium.", 60, 56.00, true, "Masajes y Bienestar"),
-                new ServiceSeed("Tratamiento hidratacion intensa", "Hidratacion profunda del cabello.", 45, 32.00, true, "Tratamientos Capilares"),
-                new ServiceSeed("Ritual reparacion keratina", "Tratamiento reparador de fibra.", 60, 44.00, true, "Tratamientos Capilares"),
-                new ServiceSeed("Exfoliacion cuero cabelludo", "Limpieza tecnica del cuero cabelludo.", 30, 22.00, true, "Tratamientos Capilares"),
-                new ServiceSeed("Botox capilar", "Tratamiento de nutricion avanzada.", 90, 74.00, true, "Tratamientos Capilares"),
+                new ServiceSeed("Masaje relajante espalda", "Descarga y relajacion de espalda.", 45, 36.00, true,
+                        "Masajes y Bienestar"),
+                new ServiceSeed("Masaje descontracturante", "Trabajo profundo muscular.", 60, 48.00, true,
+                        "Masajes y Bienestar"),
+                new ServiceSeed("Ritual piernas ligeras", "Masaje drenante y alivio de piernas.", 45, 39.00, true,
+                        "Masajes y Bienestar"),
+                new ServiceSeed("Masaje velas calientes", "Experiencia sensorial premium.", 60, 56.00, true,
+                        "Masajes y Bienestar"),
+                new ServiceSeed("Tratamiento hidratacion intensa", "Hidratacion profunda del cabello.", 45, 32.00, true,
+                        "Tratamientos Capilares"),
+                new ServiceSeed("Ritual reparacion keratina", "Tratamiento reparador de fibra.", 60, 44.00, true,
+                        "Tratamientos Capilares"),
+                new ServiceSeed("Exfoliacion cuero cabelludo", "Limpieza tecnica del cuero cabelludo.", 30, 22.00, true,
+                        "Tratamientos Capilares"),
+                new ServiceSeed("Botox capilar", "Tratamiento de nutricion avanzada.", 90, 74.00, true,
+                        "Tratamientos Capilares"),
                 new ServiceSeed("Maquillaje dia", "Maquillaje ligero y luminoso.", 45, 34.00, true, "Maquillaje"),
                 new ServiceSeed("Maquillaje noche", "Acabado mas intenso para evento.", 60, 48.00, true, "Maquillaje"),
-                new ServiceSeed("Maquillaje novia prueba", "Prueba de maquillaje para boda.", 90, 72.00, false, "Maquillaje")
-        );
+                new ServiceSeed("Maquillaje novia prueba", "Prueba de maquillaje para boda.", 90, 72.00, false,
+                        "Maquillaje"));
     }
 
     private static List<ProfessionalSeed> buildProfessionalSeeds() {
         return List.of(
-                new ProfessionalSeed("Lucia Torres", "Colorista senior", "611220301", "lucia.torres@demo-pymes.es", true, List.of("Coloracion", "Tratamientos Capilares")),
-                new ProfessionalSeed("Marina Vega", "Tecnica en unas", "611220302", "marina.vega@demo-pymes.es", true, List.of("Unas", "Maquillaje")),
-                new ProfessionalSeed("Sergio Lozano", "Barbero", "611220303", "sergio.lozano@demo-pymes.es", true, List.of("Barberia", "Corte y Peinado")),
-                new ProfessionalSeed("Clara Benitez", "Esteticista facial", "611220304", "clara.benitez@demo-pymes.es", true, List.of("Estetica Facial", "Depilacion")),
-                new ProfessionalSeed("Paula Rios", "Masajista", "611220305", "paula.rios@demo-pymes.es", true, List.of("Masajes y Bienestar")),
-                new ProfessionalSeed("Eva Molina", "Estilista", "611220306", "eva.molina@demo-pymes.es", true, List.of("Corte y Peinado", "Tratamientos Capilares")),
-                new ProfessionalSeed("Diego Salas", "Apoyo de cabina", "611220307", "diego.salas@demo-pymes.es", false, List.of("Depilacion", "Estetica Facial"))
-        );
+                new ProfessionalSeed("Lucia Torres", "Colorista senior", "611220301", "lucia.torres@demo-pymes.es",
+                        true, List.of("Coloracion", "Tratamientos Capilares")),
+                new ProfessionalSeed("Marina Vega", "Tecnica en unas", "611220302", "marina.vega@demo-pymes.es", true,
+                        List.of("Unas", "Maquillaje")),
+                new ProfessionalSeed("Sergio Lozano", "Barbero", "611220303", "sergio.lozano@demo-pymes.es", true,
+                        List.of("Barberia", "Corte y Peinado")),
+                new ProfessionalSeed("Clara Benitez", "Esteticista facial", "611220304", "clara.benitez@demo-pymes.es",
+                        true, List.of("Estetica Facial", "Depilacion")),
+                new ProfessionalSeed("Paula Rios", "Masajista", "611220305", "paula.rios@demo-pymes.es", true,
+                        List.of("Masajes y Bienestar")),
+                new ProfessionalSeed("Eva Molina", "Estilista", "611220306", "eva.molina@demo-pymes.es", true,
+                        List.of("Corte y Peinado", "Tratamientos Capilares")),
+                new ProfessionalSeed("Diego Salas", "Apoyo de cabina", "611220307", "diego.salas@demo-pymes.es", false,
+                        List.of("Depilacion", "Estetica Facial")));
     }
 
     private static List<RecurringExpenseTemplate> buildRecurringExpenseTemplates() {
@@ -1348,23 +1362,36 @@ public class DevDataSeeder implements ApplicationRunner {
                 new RecurringExpenseTemplate("Internet y telefonia", ExpenseCategory.SERVICES, 1, money("79.00"), 9),
                 new RecurringExpenseTemplate("Gestoria laboral", ExpenseCategory.SERVICES, 1, money("185.00"), 12),
                 new RecurringExpenseTemplate("Marketing digital", ExpenseCategory.SERVICES, 1, money("165.00"), 16),
-                new RecurringExpenseTemplate("Mantenimiento y limpieza", ExpenseCategory.SERVICES, 2, money("228.00"), 22)
-        );
+                new RecurringExpenseTemplate("Mantenimiento y limpieza", ExpenseCategory.SERVICES, 2, money("228.00"),
+                        22));
     }
 
     private static List<StrategicExpensePlan> buildStrategicExpensePlans() {
         return List.of(
-                new StrategicExpensePlan(YearMonth.of(2024, 3), "Campana de lanzamiento de temporada", ExpenseCategory.SERVICES, 1, money("1800.00"), 14, "Accion comercial potente para captar clientela nueva."),
-                new StrategicExpensePlan(YearMonth.of(2025, 2), "Reforma del local", ExpenseCategory.OTHER, 1, money("12500.00"), 11, "Obra integral para renovar recepcion y cabinas."),
-                new StrategicExpensePlan(YearMonth.of(2025, 5), "Maquinaria de laser diodo", ExpenseCategory.OTHER, 1, money("7200.00"), 18, "Nueva aparatologia para depilacion y cabina."),
-                new StrategicExpensePlan(YearMonth.of(2025, 7), "Camillas electricas cabina", ExpenseCategory.OTHER, 1, money("3850.00"), 9, "Renovacion de equipamiento de cabina."),
-                new StrategicExpensePlan(YearMonth.of(2025, 9), "Lamparas profesionales", ExpenseCategory.OTHER, 1, money("1680.00"), 23, "Iluminacion tecnica para puestos de trabajo."),
-                new StrategicExpensePlan(YearMonth.of(2025, 11), "Ordenadores y TPV nuevos", ExpenseCategory.OTHER, 1, money("2450.00"), 20, "Actualizacion completa del puesto de recepcion."),
-                new StrategicExpensePlan(YearMonth.of(2026, 4), "Tocadores y secadores profesionales", ExpenseCategory.OTHER, 1, money("5200.00"), 13, "Mejora de puestos en sala principal."),
-                new StrategicExpensePlan(YearMonth.of(2026, 6), "Reparacion climatizacion integral", ExpenseCategory.SERVICES, 1, money("3100.00"), 8, "Reparacion y mantenimiento profundo del sistema de clima."),
-                new StrategicExpensePlan(YearMonth.of(2027, 2), "Renovacion de imagen de marca", ExpenseCategory.SERVICES, 1, money("1450.00"), 17, "Actualizacion de rotulacion y material visual."),
-                new StrategicExpensePlan(YearMonth.of(2027, 10), "Formacion avanzada del equipo", ExpenseCategory.SERVICES, 2, money("2200.00"), 15, "Capacitacion premium en tecnicas avanzadas.")
-        );
+                new StrategicExpensePlan(YearMonth.of(2024, 3), "Campana de lanzamiento de temporada",
+                        ExpenseCategory.SERVICES, 1, money("1800.00"), 14,
+                        "Accion comercial potente para captar clientela nueva."),
+                new StrategicExpensePlan(YearMonth.of(2025, 2), "Reforma del local", ExpenseCategory.OTHER, 1,
+                        money("12500.00"), 11, "Obra integral para renovar recepcion y cabinas."),
+                new StrategicExpensePlan(YearMonth.of(2025, 5), "Maquinaria de laser diodo", ExpenseCategory.OTHER, 1,
+                        money("7200.00"), 18, "Nueva aparatologia para depilacion y cabina."),
+                new StrategicExpensePlan(YearMonth.of(2025, 7), "Camillas electricas cabina", ExpenseCategory.OTHER, 1,
+                        money("3850.00"), 9, "Renovacion de equipamiento de cabina."),
+                new StrategicExpensePlan(YearMonth.of(2025, 9), "Lamparas profesionales", ExpenseCategory.OTHER, 1,
+                        money("1680.00"), 23, "Iluminacion tecnica para puestos de trabajo."),
+                new StrategicExpensePlan(YearMonth.of(2025, 11), "Ordenadores y TPV nuevos", ExpenseCategory.OTHER, 1,
+                        money("2450.00"), 20, "Actualizacion completa del puesto de recepcion."),
+                new StrategicExpensePlan(YearMonth.of(2026, 4), "Tocadores y secadores profesionales",
+                        ExpenseCategory.OTHER, 1, money("5200.00"), 13, "Mejora de puestos en sala principal."),
+                new StrategicExpensePlan(YearMonth.of(2026, 6), "Reparacion climatizacion integral",
+                        ExpenseCategory.SERVICES, 1, money("3100.00"), 8,
+                        "Reparacion y mantenimiento profundo del sistema de clima."),
+                new StrategicExpensePlan(YearMonth.of(2027, 2), "Renovacion de imagen de marca",
+                        ExpenseCategory.SERVICES, 1, money("1450.00"), 17,
+                        "Actualizacion de rotulacion y material visual."),
+                new StrategicExpensePlan(YearMonth.of(2027, 10), "Formacion avanzada del equipo",
+                        ExpenseCategory.SERVICES, 2, money("2200.00"), 15,
+                        "Capacitacion premium en tecnicas avanzadas."));
     }
 
     private static List<String> buildClientFirstNames() {
@@ -1372,8 +1399,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Lucia", "Carmen", "Paula", "Alba", "Nuria", "Elena", "Sara", "Noelia", "Irene", "Claudia",
                 "Silvia", "Laura", "Marta", "Raquel", "Bea", "Sonia", "Natalia", "Monica", "Alicia", "Rocio",
                 "Daniel", "Javier", "Diego", "Mario", "Pablo", "Adrian", "Hector", "Victor", "Ruben", "Marcos",
-                "Teresa", "Candela", "Patricia", "Julia", "Aitana", "Miriam", "Andrea", "Ainhoa", "Lidia", "Esther"
-        );
+                "Teresa", "Candela", "Patricia", "Julia", "Aitana", "Miriam", "Andrea", "Ainhoa", "Lidia", "Esther");
     }
 
     private static List<String> buildClientLastNames() {
@@ -1381,8 +1407,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Garcia", "Lopez", "Martinez", "Sanchez", "Perez", "Gomez", "Martin", "Jimenez", "Ruiz", "Hernandez",
                 "Diaz", "Moreno", "Munoz", "Alonso", "Romero", "Navarro", "Torres", "Dominguez", "Vazquez", "Ramos",
                 "Gil", "Serrano", "Blanco", "Molina", "Castro", "Ortega", "Delgado", "Suarez", "Benitez", "Prieto",
-                "Campos", "Vega", "Lorenzo", "Calvo", "Carrasco", "Bravo", "Marin", "Iglesias", "Flores", "Fuentes"
-        );
+                "Campos", "Vega", "Lorenzo", "Calvo", "Carrasco", "Bravo", "Marin", "Iglesias", "Flores", "Fuentes");
     }
 
     private static List<String> buildAppointmentNotes() {
@@ -1394,8 +1419,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Revisar historial de color anterior.",
                 "Recordar oferta de mantenimiento en casa.",
                 "Cliente habitual del equipo.",
-                "Quiere acabar antes del mediodia."
-        );
+                "Quiere acabar antes del mediodia.");
     }
 
     private static List<String> buildExpenseNotes() {
@@ -1405,8 +1429,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Facturado por proveedor habitual.",
                 "Necesario para mantener el servicio activo.",
                 "Ajuste de aprovisionamiento del mes.",
-                "Gasto incluido en la planificacion del seed."
-        );
+                "Gasto incluido en la planificacion del seed.");
     }
 
     private static List<String> buildSaleNotes() {
@@ -1416,8 +1439,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Cobro habitual al cierre de servicio.",
                 "Operacion para reporte comercial.",
                 "Venta de mostrador.",
-                "Venta vinculada a recomendacion de mantenimiento."
-        );
+                "Venta vinculada a recomendacion de mantenimiento.");
     }
 
     private static Map<YearMonth, MonthPlan> buildMonthPlans() {
@@ -1434,10 +1456,13 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private static MonthPlan buildMonthPlan(YearMonth month) {
         OutcomeTarget quarterOutcome = switch (month.getYear()) {
-            case 2024 -> month.getMonthValue() >= 7 && month.getMonthValue() <= 9 ? OutcomeTarget.LOSS : OutcomeTarget.GAIN;
-            case 2025 -> month.getMonthValue() >= 7 && month.getMonthValue() <= 9 ? OutcomeTarget.GAIN : OutcomeTarget.LOSS;
+            case 2024 ->
+                month.getMonthValue() >= 7 && month.getMonthValue() <= 9 ? OutcomeTarget.LOSS : OutcomeTarget.GAIN;
+            case 2025 ->
+                month.getMonthValue() >= 7 && month.getMonthValue() <= 9 ? OutcomeTarget.GAIN : OutcomeTarget.LOSS;
             case 2026 -> ((month.getMonthValue() - 1) / 3) % 2 == 0 ? OutcomeTarget.GAIN : OutcomeTarget.LOSS;
-            case 2027 -> month.getMonthValue() >= 4 && month.getMonthValue() <= 6 ? OutcomeTarget.LOSS : OutcomeTarget.GAIN;
+            case 2027 ->
+                month.getMonthValue() >= 4 && month.getMonthValue() <= 6 ? OutcomeTarget.LOSS : OutcomeTarget.GAIN;
             default -> OutcomeTarget.FLEX;
         };
 
@@ -1448,18 +1473,27 @@ public class DevDataSeeder implements ApplicationRunner {
 
         return switch (month.getYear()) {
             case 2024 -> monthOutcome == OutcomeTarget.GAIN
-                    ? new MonthPlan(month, 16 + (month.getMonthValue() % 5), 66, 14, 42, 6, 10, new BigDecimal("1.03"), new BigDecimal("1.02"), new BigDecimal("0.94"), monthOutcome, money("180.00"))
-                    : new MonthPlan(month, 8 + (month.getMonthValue() % 3), 48, 18, 55, 5, 5, new BigDecimal("0.97"), new BigDecimal("0.96"), new BigDecimal("1.12"), monthOutcome, money("240.00"));
+                    ? new MonthPlan(month, 16 + (month.getMonthValue() % 5), 66, 14, 42, 6, 10, new BigDecimal("1.03"),
+                            new BigDecimal("1.02"), new BigDecimal("0.94"), monthOutcome, money("180.00"))
+                    : new MonthPlan(month, 8 + (month.getMonthValue() % 3), 48, 18, 55, 5, 5, new BigDecimal("0.97"),
+                            new BigDecimal("0.96"), new BigDecimal("1.12"), monthOutcome, money("240.00"));
             case 2025 -> monthOutcome == OutcomeTarget.GAIN
-                    ? new MonthPlan(month, 12 + (month.getMonthValue() % 4), 58, 14, 46, 6, 9, new BigDecimal("1.01"), new BigDecimal("1.00"), new BigDecimal("1.02"), monthOutcome, money("160.00"))
-                    : new MonthPlan(month, 5 + (month.getMonthValue() % 3), 38, 22, 60, 5, 4, new BigDecimal("0.95"), new BigDecimal("0.94"), new BigDecimal("1.22"), monthOutcome, money("280.00"));
+                    ? new MonthPlan(month, 12 + (month.getMonthValue() % 4), 58, 14, 46, 6, 9, new BigDecimal("1.01"),
+                            new BigDecimal("1.00"), new BigDecimal("1.02"), monthOutcome, money("160.00"))
+                    : new MonthPlan(month, 5 + (month.getMonthValue() % 3), 38, 22, 60, 5, 4, new BigDecimal("0.95"),
+                            new BigDecimal("0.94"), new BigDecimal("1.22"), monthOutcome, money("280.00"));
             case 2026 -> monthOutcome == OutcomeTarget.GAIN
-                    ? new MonthPlan(month, 14 + (month.getMonthValue() % 4), 61, 16, 48, 6, 8, new BigDecimal("1.02"), new BigDecimal("1.01"), new BigDecimal("0.98"), monthOutcome, money("170.00"))
-                    : new MonthPlan(month, 7 + (month.getMonthValue() % 3), 44, 20, 57, 5, 5, new BigDecimal("0.98"), new BigDecimal("0.97"), new BigDecimal("1.10"), monthOutcome, money("220.00"));
+                    ? new MonthPlan(month, 14 + (month.getMonthValue() % 4), 61, 16, 48, 6, 8, new BigDecimal("1.02"),
+                            new BigDecimal("1.01"), new BigDecimal("0.98"), monthOutcome, money("170.00"))
+                    : new MonthPlan(month, 7 + (month.getMonthValue() % 3), 44, 20, 57, 5, 5, new BigDecimal("0.98"),
+                            new BigDecimal("0.97"), new BigDecimal("1.10"), monthOutcome, money("220.00"));
             case 2027 -> monthOutcome == OutcomeTarget.GAIN
-                    ? new MonthPlan(month, 22 + (month.getMonthValue() % 5), 72, 11, 40, 7, 14, new BigDecimal("1.07"), new BigDecimal("1.05"), new BigDecimal("0.92"), monthOutcome, money("240.00"))
-                    : new MonthPlan(month, 10 + (month.getMonthValue() % 4), 50, 18, 53, 5, 7, new BigDecimal("0.99"), new BigDecimal("0.98"), new BigDecimal("1.08"), monthOutcome, money("190.00"));
-            default -> new MonthPlan(month, 10, 55, 15, 50, 5, 6, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, OutcomeTarget.FLEX, money("0.00"));
+                    ? new MonthPlan(month, 22 + (month.getMonthValue() % 5), 72, 11, 40, 7, 14, new BigDecimal("1.07"),
+                            new BigDecimal("1.05"), new BigDecimal("0.92"), monthOutcome, money("240.00"))
+                    : new MonthPlan(month, 10 + (month.getMonthValue() % 4), 50, 18, 53, 5, 7, new BigDecimal("0.99"),
+                            new BigDecimal("0.98"), new BigDecimal("1.08"), monthOutcome, money("190.00"));
+            default -> new MonthPlan(month, 10, 55, 15, 50, 5, 6, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
+                    OutcomeTarget.FLEX, money("0.00"));
         };
     }
 
@@ -1473,65 +1507,59 @@ public class DevDataSeeder implements ApplicationRunner {
                 "Retail Profesional",
                 true,
                 List.of("Champu", "Acondicionador", "Mascarilla", "Serum", "Protector termico"),
-                List.of("argan repair", "color shield", "rizo definido", "volumen ligero", "keratina smooth", "brillo espejo"),
-                money("7.10")
-        );
+                List.of("argan repair", "color shield", "rizo definido", "volumen ligero", "keratina smooth",
+                        "brillo espejo"),
+                money("7.10"));
         addInventoryTemplates(
                 templates,
                 "Coloracion",
                 false,
                 List.of("Tinte permanente", "Oxidante crema", "Matizador", "Decolorante", "Plex tecnico"),
                 List.of("4.0 castano", "5.35 avellana", "6.34 miel", "7.1 ceniza", "perla frio", "beige natural"),
-                money("4.20")
-        );
+                money("4.20"));
         addInventoryTemplates(
                 templates,
                 "Barberia",
                 true,
                 List.of("Aceite barba", "Balsamo after shave", "Cera mate", "Pomada brillo", "Gel afeitado"),
                 List.of("cedar", "mint fresh", "amber wood", "classic barber", "sensitive skin", "urban hold"),
-                money("5.40")
-        );
+                money("5.40"));
         addInventoryTemplates(
                 templates,
                 "Estetica Facial",
                 true,
                 List.of("Gel limpiador", "Tonico calmante", "Serum", "Crema nutritiva", "Mascara facial"),
                 List.of("vitamina c", "aloe balance", "hialuronico", "niacinamida", "calendula", "glow repair"),
-                money("8.20")
-        );
+                money("8.20"));
         addInventoryTemplates(
                 templates,
                 "Unas",
                 true,
                 List.of("Base rubber", "Top coat", "Esmalte semipermanente", "Aceite cuticulas", "Gel constructor"),
                 List.of("nude sand", "rosa clean", "rojo cereza", "moka soft", "milky white", "peach nude"),
-                money("4.60")
-        );
+                money("4.60"));
         addInventoryTemplates(
                 templates,
                 "Masajes y Bienestar",
                 false,
                 List.of("Aceite masaje", "Crema drenante", "Gel frio", "Locion relajante"),
                 List.of("lavanda", "romero", "citricos", "arnica", "eucalipto", "relax deep"),
-                money("6.70")
-        );
+                money("6.70"));
         addInventoryTemplates(
                 templates,
                 "Tratamientos Capilares",
                 true,
                 List.of("Ampolla capilar", "Locion cuero cabelludo", "Exfoliante capilar", "Ritual reparador"),
-                List.of("anti caida", "hidratacion pro", "detox scalp", "densidad boost", "repair intense", "shine pro"),
-                money("7.80")
-        );
+                List.of("anti caida", "hidratacion pro", "detox scalp", "densidad boost", "repair intense",
+                        "shine pro"),
+                money("7.80"));
         addInventoryTemplates(
                 templates,
                 "Maquillaje",
                 true,
                 List.of("Base fluida", "Corrector", "Iluminador", "Fijador maquillaje"),
                 List.of("nude ivory", "beige warm", "sun glow", "rose light", "soft matte", "long wear"),
-                money("7.40")
-        );
+                money("7.40"));
 
         return List.copyOf(templates.stream().limit(TARGET_INVENTORY_PRODUCTS).toList());
     }
@@ -1544,8 +1572,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 45,
                 10,
-                "DEM-RTL-CHAMP-001"
-        ));
+                "DEM-RTL-CHAMP-001"));
         templates.add(InventoryTemplate.simple(
                 "Acondicionador Kerastase",
                 "Retail Profesional",
@@ -1553,8 +1580,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 36,
                 8,
-                "DEM-RTL-ACOND-001"
-        ));
+                "DEM-RTL-ACOND-001"));
         templates.add(InventoryTemplate.simple(
                 "Laca Fijacion Fuerte",
                 "Retail Profesional",
@@ -1562,8 +1588,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 28,
                 6,
-                "DEM-RTL-LACA-001"
-        ));
+                "DEM-RTL-LACA-001"));
         templates.add(InventoryTemplate.simple(
                 "Crema Hidratante Facial",
                 "Estetica Facial",
@@ -1571,8 +1596,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 30,
                 6,
-                "DEM-EST-CREMA-001"
-        ));
+                "DEM-EST-CREMA-001"));
         templates.add(InventoryTemplate.simple(
                 "Aceite Esencial Lavanda",
                 "Masajes y Bienestar",
@@ -1580,8 +1604,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 22,
                 5,
-                "DEM-MAS-ACEITE-001"
-        ));
+                "DEM-MAS-ACEITE-001"));
         templates.add(InventoryTemplate.simple(
                 "Mascara Facial Vitamina C",
                 "Estetica Facial",
@@ -1589,8 +1612,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 26,
                 6,
-                "DEM-EST-MASC-001"
-        ));
+                "DEM-EST-MASC-001"));
         templates.add(InventoryTemplate.simple(
                 "Aceite Barba Cedar",
                 "Barberia",
@@ -1598,8 +1620,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 24,
                 5,
-                "DEM-BAR-ACEITE-001"
-        ));
+                "DEM-BAR-ACEITE-001"));
         templates.add(InventoryTemplate.simple(
                 "Esmalte Semipermanente Nude",
                 "Unas",
@@ -1607,30 +1628,33 @@ public class DevDataSeeder implements ApplicationRunner {
                 true,
                 32,
                 8,
-                "DEM-UNA-ESMALTE-001"
-        ));
+                "DEM-UNA-ESMALTE-001"));
         templates.add(InventoryTemplate.withVariants(
                 "Camiseta Basica",
                 "Retail Profesional",
                 true,
                 List.of(
-                        InventoryVariantTemplate.of("Roja / S", "DEM-CAM-ROJ-S", 34, 6, money("6.80"), Map.of("color", "Roja", "talla", "S")),
-                        InventoryVariantTemplate.of("Roja / M", "DEM-CAM-ROJ-M", 38, 8, money("6.80"), Map.of("color", "Roja", "talla", "M")),
-                        InventoryVariantTemplate.of("Azul / M", "DEM-CAM-AZU-M", 32, 8, money("6.90"), Map.of("color", "Azul", "talla", "M")),
-                        InventoryVariantTemplate.of("Azul / L", "DEM-CAM-AZU-L", 28, 6, money("6.90"), Map.of("color", "Azul", "talla", "L"))
-                )
-        ));
+                        InventoryVariantTemplate.of("Roja / S", "DEM-CAM-ROJ-S", 34, 6, money("6.80"),
+                                Map.of("color", "Roja", "talla", "S")),
+                        InventoryVariantTemplate.of("Roja / M", "DEM-CAM-ROJ-M", 38, 8, money("6.80"),
+                                Map.of("color", "Roja", "talla", "M")),
+                        InventoryVariantTemplate.of("Azul / M", "DEM-CAM-AZU-M", 32, 8, money("6.90"),
+                                Map.of("color", "Azul", "talla", "M")),
+                        InventoryVariantTemplate.of("Azul / L", "DEM-CAM-AZU-L", 28, 6, money("6.90"),
+                                Map.of("color", "Azul", "talla", "L")))));
         templates.add(InventoryTemplate.withVariants(
                 "Tornillo Galvanizado",
                 "Retail Profesional",
                 true,
                 List.of(
-                        InventoryVariantTemplate.of("4mm / 20mm", "DEM-TOR-4-20", 90, 15, money("0.12"), Map.of("diametro", "4mm", "largo", "20mm")),
-                        InventoryVariantTemplate.of("4mm / 30mm", "DEM-TOR-4-30", 84, 15, money("0.14"), Map.of("diametro", "4mm", "largo", "30mm")),
-                        InventoryVariantTemplate.of("6mm / 40mm", "DEM-TOR-6-40", 72, 12, money("0.18"), Map.of("diametro", "6mm", "largo", "40mm")),
-                        InventoryVariantTemplate.of("8mm / 50mm", "DEM-TOR-8-50", 60, 10, money("0.24"), Map.of("diametro", "8mm", "largo", "50mm"))
-                )
-        ));
+                        InventoryVariantTemplate.of("4mm / 20mm", "DEM-TOR-4-20", 90, 15, money("0.12"),
+                                Map.of("diametro", "4mm", "largo", "20mm")),
+                        InventoryVariantTemplate.of("4mm / 30mm", "DEM-TOR-4-30", 84, 15, money("0.14"),
+                                Map.of("diametro", "4mm", "largo", "30mm")),
+                        InventoryVariantTemplate.of("6mm / 40mm", "DEM-TOR-6-40", 72, 12, money("0.18"),
+                                Map.of("diametro", "6mm", "largo", "40mm")),
+                        InventoryVariantTemplate.of("8mm / 50mm", "DEM-TOR-8-50", 60, 10, money("0.24"),
+                                Map.of("diametro", "8mm", "largo", "50mm")))));
     }
 
     private static void addInventoryTemplates(
@@ -1639,8 +1663,7 @@ public class DevDataSeeder implements ApplicationRunner {
             boolean sellable,
             List<String> productTypes,
             List<String> lines,
-            BigDecimal basePrice
-    ) {
+            BigDecimal basePrice) {
         for (int typeIndex = 0; typeIndex < productTypes.size(); typeIndex++) {
             for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
                 String name = productTypes.get(typeIndex) + " " + lines.get(lineIndex);
@@ -1668,8 +1691,7 @@ public class DevDataSeeder implements ApplicationRunner {
             int durationMinutes,
             double price,
             boolean active,
-            String categoryName
-    ) {
+            String categoryName) {
     }
 
     private record ProfessionalSeed(
@@ -1678,8 +1700,7 @@ public class DevDataSeeder implements ApplicationRunner {
             String phone,
             String email,
             boolean active,
-            List<String> preferredCategories
-    ) {
+            List<String> preferredCategories) {
     }
 
     private record SeededProfessional(ProfessionalResponse response, ProfessionalSeed seed) {
@@ -1693,10 +1714,10 @@ public class DevDataSeeder implements ApplicationRunner {
             Integer stock,
             Integer minimumStock,
             String sku,
-            List<InventoryVariantTemplate> variants
-    ) {
+            List<InventoryVariantTemplate> variants) {
 
-        static InventoryTemplate generated(String name, String categoryName, BigDecimal purchasePrice, boolean sellable) {
+        static InventoryTemplate generated(String name, String categoryName, BigDecimal purchasePrice,
+                boolean sellable) {
             return new InventoryTemplate(name, categoryName, purchasePrice, sellable, null, null, null, List.of());
         }
 
@@ -1707,17 +1728,16 @@ public class DevDataSeeder implements ApplicationRunner {
                 boolean sellable,
                 int stock,
                 int minimumStock,
-                String sku
-        ) {
-            return new InventoryTemplate(name, categoryName, purchasePrice, sellable, stock, minimumStock, sku, List.of());
+                String sku) {
+            return new InventoryTemplate(name, categoryName, purchasePrice, sellable, stock, minimumStock, sku,
+                    List.of());
         }
 
         static InventoryTemplate withVariants(
                 String name,
                 String categoryName,
                 boolean sellable,
-                List<InventoryVariantTemplate> variants
-        ) {
+                List<InventoryVariantTemplate> variants) {
             return new InventoryTemplate(name, categoryName, null, sellable, 0, 0, null, variants);
         }
 
@@ -1732,8 +1752,7 @@ public class DevDataSeeder implements ApplicationRunner {
             int stock,
             int minimumStock,
             BigDecimal purchasePrice,
-            Map<String, String> attributes
-    ) {
+            Map<String, String> attributes) {
 
         static InventoryVariantTemplate of(
                 String variantLabel,
@@ -1741,8 +1760,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 int stock,
                 int minimumStock,
                 BigDecimal purchasePrice,
-                Map<String, String> attributes
-        ) {
+                Map<String, String> attributes) {
             return new InventoryVariantTemplate(variantLabel, sku, stock, minimumStock, purchasePrice, attributes);
         }
     }
@@ -1755,8 +1773,7 @@ public class DevDataSeeder implements ApplicationRunner {
             StockProfile stockProfile,
             String categoryName,
             boolean hasVariants,
-            List<SeededInventoryVariant> variants
-    ) {
+            List<SeededInventoryVariant> variants) {
     }
 
     private record SeededInventoryVariant(
@@ -1765,8 +1782,7 @@ public class DevDataSeeder implements ApplicationRunner {
             String sku,
             BigDecimal purchasePrice,
             int initialStock,
-            StockProfile stockProfile
-    ) {
+            StockProfile stockProfile) {
     }
 
     private record SeededInventoryItem(
@@ -1777,8 +1793,7 @@ public class DevDataSeeder implements ApplicationRunner {
             BigDecimal purchasePrice,
             boolean sellable,
             StockProfile stockProfile,
-            String categoryName
-    ) {
+            String categoryName) {
         boolean variant() {
             return variantId != null;
         }
@@ -1799,8 +1814,7 @@ public class DevDataSeeder implements ApplicationRunner {
             ExpenseCategory category,
             int quantity,
             BigDecimal baseAmount,
-            int dayOfMonth
-    ) {
+            int dayOfMonth) {
     }
 
     private record StrategicExpensePlan(
@@ -1810,8 +1824,7 @@ public class DevDataSeeder implements ApplicationRunner {
             int quantity,
             BigDecimal amount,
             int dayOfMonth,
-            String notes
-    ) {
+            String notes) {
     }
 
     private record MonthPlan(
@@ -1826,8 +1839,7 @@ public class DevDataSeeder implements ApplicationRunner {
             BigDecimal manualServicePriceFactor,
             BigDecimal recurringExpenseMultiplier,
             OutcomeTarget targetOutcome,
-            BigDecimal targetMargin
-    ) {
+            BigDecimal targetMargin) {
     }
 
     private enum StockProfile {
@@ -1851,8 +1863,7 @@ public class DevDataSeeder implements ApplicationRunner {
             long inventoryProducts,
             long expenses,
             long appointments,
-            long sales
-    ) {
+            long sales) {
         boolean hasAnyData() {
             return categories > 0
                     || services > 0
