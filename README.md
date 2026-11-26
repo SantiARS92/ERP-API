@@ -1,4 +1,13 @@
-# PYMES Backend
+# ERP — PYMES Backend
+
+![Java](https://img.shields.io/badge/Java_21-ED8B00?style=flat&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-6DB33F?style=flat&logo=springboot&logoColor=white)
+![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=flat&logo=springsecurity&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-000000?style=flat&logo=jsonwebtokens&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-C71A36?style=flat&logo=apachemaven&logoColor=white)
+
+> 🔗 **Frontend complementario:** [ERP-WEB (Angular)](https://github.com/SantiARS92/ERP-WEB)
 
 API REST para la gestión operativa de pymes y pequeños negocios. El proyecto está desarrollado con Spring Boot y PostgreSQL, e incluye módulos para autenticación, clientes, servicios, citas, ventas, gastos, inventario, profesionales, configuración del negocio e informes.
 
